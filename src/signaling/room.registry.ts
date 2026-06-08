@@ -1,78 +1,72 @@
 import { Injectable, Logger } from '@nestjs/common';
-
-export interface RoomMember {
-  socketId: string;
-  userId: string;
-  joinedAt: number;
-}
-
-export interface JoinResult {
-  selfSocketId: string;
-  existingPeers: RoomMember[];
-}
+import type { RoomMember } from './signaling.types';
 
 @Injectable()
 export class RoomRegistry {
   private readonly logger = new Logger(RoomRegistry.name);
   private readonly rooms = new Map<string, Map<string, RoomMember>>();
 
-  join(roomId: string, socketId: string, userId: string): JoinResult {
-    const members = this.rooms.get(roomId) ?? new Map<string, RoomMember>();
-    const existing: RoomMember[] = [];
-    for (const [id, member] of members) {
-      if (id !== socketId) existing.push(member);
-    }
-
-    members.set(socketId, {
+  join(callId: string, socketId: string, userId: string): RoomMember {
+    const room = this.rooms.get(callId) ?? new Map<string, RoomMember>();
+    const member: RoomMember = {
       socketId,
       userId,
       joinedAt: Date.now(),
-    });
-    this.rooms.set(roomId, members);
-
-    this.logger.log(
-      `user ${userId} (${socketId}) joined room ${roomId}; peers=${existing.length}`,
+    };
+    room.set(socketId, member);
+    this.rooms.set(callId, room);
+    this.logger.debug(
+      `join callId=${callId} socketId=${socketId} userId=${userId} peers=${room.size - 1}`,
     );
-
-    return { selfSocketId: socketId, existingPeers: existing };
+    return member;
   }
 
-  leave(socketId: string): Array<{ roomId: string; userId: string }> {
-    const left: Array<{ roomId: string; userId: string }> = [];
-    for (const [roomId, members] of this.rooms) {
+  leave(socketId: string): Array<{ callId: string; member: RoomMember }> {
+    const out: Array<{ callId: string; member: RoomMember }> = [];
+    for (const [callId, members] of this.rooms) {
       const member = members.get(socketId);
       if (member) {
         members.delete(socketId);
-        left.push({ roomId, userId: member.userId });
-        if (members.size === 0) this.rooms.delete(roomId);
+        out.push({ callId, member });
+        if (members.size === 0) this.rooms.delete(callId);
       }
     }
-    return left;
+    if (out.length > 0) {
+      this.logger.debug(`leave socketId=${socketId} rooms=${out.length}`);
+    }
+    return out;
   }
 
-  members(roomId: string): RoomMember[] {
-    return Array.from(this.rooms.get(roomId)?.values() ?? []);
+  members(callId: string): RoomMember[] {
+    return Array.from(this.rooms.get(callId)?.values() ?? []);
   }
 
-  member(roomId: string, socketId: string): RoomMember | undefined {
-    return this.rooms.get(roomId)?.get(socketId);
+  member(callId: string, socketId: string): RoomMember | undefined {
+    return this.rooms.get(callId)?.get(socketId);
   }
 
-  hasRoom(roomId: string): boolean {
-    return this.rooms.has(roomId);
+  hasMember(callId: string, userId: string): boolean {
+    const room = this.rooms.get(callId);
+    if (!room) return false;
+    for (const member of room.values()) {
+      if (member.userId === userId) return true;
+    }
+    return false;
   }
 
-  roomCount(): number {
-    return this.rooms.size;
-  }
-
-  memberCount(): number {
-    let total = 0;
-    for (const members of this.rooms.values()) total += members.size;
-    return total;
+  isParticipant(callId: string, userId: string): boolean {
+    return this.hasMember(callId, userId);
   }
 
   reset(): void {
     this.rooms.clear();
+  }
+
+  snapshotForTests(): Map<string, Map<string, RoomMember>> {
+    const out = new Map<string, Map<string, RoomMember>>();
+    for (const [callId, members] of this.rooms) {
+      out.set(callId, new Map(members));
+    }
+    return out;
   }
 }
