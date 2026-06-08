@@ -23,7 +23,43 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Koom Calls backend: NestJS control plane + LiveKit SFU + Redis + coturn.
+See [docs/adr/0001-webrtc-multiusuario-control-plane.md](docs/adr/0001-webrtc-multiusuario-control-plane.md)
+for the architecture decision record that drives this project.
+
+## Configuration
+
+All runtime configuration comes from environment variables. Copy
+[`.env.example`](.env.example) to `.env` and fill in the values for your
+environment. The schema is validated at boot by
+`src/config/env.schema.ts` (zod); invalid combinations fail fast with a
+descriptive error.
+
+### Required in production
+
+| Variable       | Description                                              |
+| -------------- | -------------------------------------------------------- |
+| `JWT_SECRET`   | Secret used to sign access tokens.                       |
+| `NODE_ENV`     | Must be `production` in production deployments.         |
+
+### Optional / feature-gated
+
+| Variable                 | Description                                               |
+| ------------------------ | --------------------------------------------------------- |
+| `PORT`                   | HTTP port (default `8080`).                               |
+| `CORS_ORIGIN`            | CORS origin, `*` or comma-separated list (default `*`).   |
+| `SIGNALING_NAMESPACE`    | Socket.IO namespace (default `/signaling`).               |
+| `DATABASE_URL`           | TypeORM/DB URL (default `sqlite::memory:`).                |
+| `JWT_TTL`                | Access-token TTL (default `1h`).                          |
+| `LIVEKIT_URL`            | LiveKit server URL, enables SFU token minting when set.   |
+| `LIVEKIT_API_KEY`        | LiveKit API key.                                          |
+| `LIVEKIT_API_SECRET`     | LiveKit API secret.                                       |
+| `REDIS_URL`              | Redis URL for pub/sub and presence.                       |
+| `TURN_URL`               | coturn URL for short-lived TURN credentials.              |
+| `TURN_SHARED_SECRET`     | Shared secret to sign TURN credentials.                   |
+| `TURN_TTL`               | TURN credential TTL in seconds (default `3600`).          |
+| `PEER_*`                 | **Deprecated** — PeerJS broker, will be removed in M2–M4. |
+
 
 ## Project setup
 

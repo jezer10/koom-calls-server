@@ -1,3 +1,5 @@
+import { parseEnv, type ParsedEnv } from './env.schema';
+
 export interface AppConfig {
   httpPort: number;
   peer: {
@@ -11,6 +13,12 @@ export interface AppConfig {
     namespace: string;
     corsOrigin: string | string[];
   };
+  /**
+   * Parsed environment values, validated against `env.schema.ts`.
+   * Exposed so consumers (modules, guards, providers) can read
+   * canonical configuration without re-parsing `process.env`.
+   */
+  env: ParsedEnv;
 }
 
 function parseInt10(value: string | undefined, fallback: number): number {
@@ -25,20 +33,24 @@ function parseBool(value: string | undefined, fallback: boolean): boolean {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const corsOrigin = env.CORS_ORIGIN ?? '*';
+  const parsed = parseEnv(env);
 
   return {
-    httpPort: parseInt10(env.PORT, 8080),
+    httpPort: parseInt10(env.PORT, parsed.PORT),
     peer: {
       enabled: env.SKIP_PEER !== '1',
-      port: parseInt10(env.PEER_PORT, 9000),
-      key: env.PEER_KEY ?? 'peerjs',
-      path: env.PEER_PATH ?? '/',
-      allowDiscovery: parseBool(env.PEER_ALLOW_DISCOVERY, false),
+      port: parseInt10(env.PEER_PORT, parsed.PEER_PORT),
+      key: env.PEER_KEY ?? parsed.PEER_KEY,
+      path: env.PEER_PATH ?? parsed.PEER_PATH,
+      allowDiscovery: parseBool(
+        env.PEER_ALLOW_DISCOVERY,
+        parsed.PEER_ALLOW_DISCOVERY,
+      ),
     },
     signaling: {
-      namespace: env.SIGNALING_NAMESPACE ?? '/signaling',
-      corsOrigin,
+      namespace: env.SIGNALING_NAMESPACE ?? parsed.SIGNALING_NAMESPACE,
+      corsOrigin: env.CORS_ORIGIN ?? parsed.CORS_ORIGIN,
     },
+    env: parsed,
   };
 }
