@@ -26,11 +26,20 @@ function parseBool(value: string | undefined, fallback: boolean): boolean {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const corsOrigin = env.CORS_ORIGIN ?? '*';
+  const peerEnabled = env.SKIP_PEER !== '1';
+  if (peerEnabled) {
+    // LBR-67: deprecation notice. The PeerJS broker is being replaced by
+    // LiveKit in M3; warn once at config load when the legacy path is on.
+
+    console.warn(
+      '[deprecated] PEER_ENABLED will be removed. Use LiveKit (M3).',
+    );
+  }
 
   return {
     httpPort: parseInt10(env.PORT, 8080),
     peer: {
-      enabled: env.SKIP_PEER !== '1',
+      enabled: peerEnabled,
       port: parseInt10(env.PEER_PORT, 9000),
       key: env.PEER_KEY ?? 'peerjs',
       path: env.PEER_PATH ?? '/',
