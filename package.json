@@ -25,6 +25,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.1.24",
     "@nestjs/websockets": "^11.1.24",
+    "livekit-server-sdk": "^2.15.4",
     "peer": "^1.0.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
