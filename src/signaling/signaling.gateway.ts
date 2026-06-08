@@ -43,6 +43,12 @@ export class SignalingGateway
         userId,
         roomId,
       });
+      this.server.to(roomId).emit('peer:left', {
+        socketId: client.id,
+        userId,
+        roomId,
+        leftAt: Date.now(),
+      });
     }
     if (left.length > 0) {
       this.logger.log(
@@ -74,6 +80,13 @@ export class SignalingGateway
     client.to(roomId).emit('user-joined', {
       socketId: client.id,
       userId,
+    });
+
+    client.to(roomId).emit('peer:joined', {
+      socketId: client.id,
+      userId,
+      roomId,
+      joinedAt: Date.now(),
     });
 
     return { ok: true, roomId, userId };

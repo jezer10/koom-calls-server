@@ -130,6 +130,16 @@ describe('SignalingGateway', () => {
           event: 'user-joined',
           payload: { socketId: 'sock-B', userId: 'bob' },
         },
+        {
+          room: 'room-1',
+          event: 'peer:joined',
+          payload: {
+            socketId: 'sock-B',
+            userId: 'bob',
+            roomId: 'room-1',
+            joinedAt: expect.any(Number) as unknown as number,
+          },
+        },
       ]);
     });
 

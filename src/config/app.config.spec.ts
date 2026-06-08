@@ -13,6 +13,9 @@ describe('loadConfig', () => {
     delete process.env.SKIP_PEER;
     delete process.env.SIGNALING_NAMESPACE;
     delete process.env.CORS_ORIGIN;
+    delete process.env.JWT_SECRET;
+    delete process.env.JWT_ISSUER;
+    delete process.env.JWT_EXPIRES_IN;
   });
 
   afterAll(() => {
@@ -33,6 +36,11 @@ describe('loadConfig', () => {
       signaling: {
         namespace: '/signaling',
         corsOrigin: '*',
+      },
+      jwt: {
+        secret: 'koom-calls-test-secret',
+        issuer: 'koom-calls',
+        expiresInSeconds: 3600,
       },
     });
   });
