@@ -1,0 +1,5 @@
+# Call domain
+
+This folder is reserved for LBR-68 (entities, repositories) and LBR-69
+(state machine, transitions). LBR-67 only creates the folder so other
+modules can import from `src/calls/domain` once the entities land.
