@@ -4,6 +4,10 @@ import { AppModule } from './app.module';
 import { loadConfig } from './config/app.config';
 import { startPeerServer } from './peer/peer-server';
 
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'sqlite::memory:';
+}
+
 export interface BootstrapOptions {
   enablePeerServer?: boolean;
 }
