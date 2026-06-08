@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
-import { AppModule } from './app.module';
+import { AppModule, SocketIoRedisAdapter } from './app.module';
 import { loadConfig } from './config/app.config';
 import { startPeerServer } from './peer/peer-server';
 
@@ -19,6 +19,8 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
       credentials: true,
     },
   });
+
+  app.useWebSocketAdapter(app.get(SocketIoRedisAdapter));
 
   if (enablePeer) {
     startPeerServer({
