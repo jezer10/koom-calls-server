@@ -1,56 +1,61 @@
-export interface JoinPayload {
-  roomId: string;
-  userId: string;
-}
+export type CallEventType =
+  | 'call:ringing'
+  | 'call:accept'
+  | 'call:reject'
+  | 'call:cancel'
+  | 'call:end';
 
-export interface SignalPayload {
-  roomId: string;
-  from: string;
-  to: string;
-  signal: unknown;
-}
+export type WebrtcSignalType =
+  | 'webrtc:offer'
+  | 'webrtc:answer'
+  | 'webrtc:ice-candidate';
 
-export interface ExistingUsersEvent {
-  socketIds: string[];
-  members: Array<{ socketId: string; userId: string }>;
-}
+export type SfuEventType =
+  | 'sfu:join-room'
+  | 'sfu:publish-track'
+  | 'sfu:subscribe-track';
 
-export interface UserJoinedEvent {
+export interface RoomMember {
   socketId: string;
   userId: string;
+  joinedAt: number;
 }
 
-export interface UserLeftEvent {
-  socketId: string;
+export interface SignalingUserData {
   userId: string;
-  roomId: string;
 }
 
-export interface SignalEvent {
+export interface CallInviteForUser {
+  callId: string;
   from: string;
-  to: string;
-  signal: unknown;
-  roomId: string;
+  type: 'audio' | 'video';
 }
 
-export function isJoinPayload(value: unknown): value is JoinPayload {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.roomId === 'string' &&
-    v.roomId.length > 0 &&
-    typeof v.userId === 'string' &&
-    v.userId.length > 0
-  );
+export interface CallEventBroadcast {
+  callId: string;
+  from: string;
+  event: CallEventType;
 }
 
-export function isSignalPayload(value: unknown): value is SignalPayload {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.roomId === 'string' &&
-    typeof v.from === 'string' &&
-    typeof v.to === 'string' &&
-    'signal' in v
-  );
+export interface PeerJoinedEvent {
+  callId: string;
+  userId: string;
+  socketId: string;
+}
+
+export interface PeerLeftEvent {
+  callId: string;
+  userId: string;
+  socketId: string;
+}
+
+export interface PeerReconnectingEvent {
+  callId: string;
+  userId: string;
+  socketId: string;
+}
+
+export interface SfuEventAck {
+  status: 'pending-m3' | 'ok' | 'error';
+  detail?: string;
 }
