@@ -1,0 +1,103 @@
+name: Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: ["Publish Docker image"]
+    types:
+      - completed
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to deploy (e.g. latest, main-abc1234). Default: latest'
+        required: false
+        default: 'latest'
+
+concurrency:
+  group: deploy-${{ github.event.repository.name }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: production
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+
+    steps:
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            DEPLOY_DIR="${{ secrets.VPS_DEPLOY_DIR_BACK || '$HOME/koom-calls-server' }}"
+            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}"
+
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+
+            if [ ! -f .env ]; then
+              echo "::error::Missing $DEPLOY_DIR/.env"
+              echo "::error::Create the env file (see .env.example.docker) before deploying."
+              exit 1
+            fi
+
+            echo "::group::Logging in to GHCR"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            echo "::endgroup::"
+
+            echo "::group::Pulling $IMAGE"
+            docker pull "$IMAGE"
+            echo "::endgroup::"
+
+            echo "::group::Stopping previous container (if any)"
+            docker rm -f koom-calls-server || true
+            echo "::endgroup::"
+
+            echo "::group::Ensuring koom-net network"
+            docker network inspect koom-net >/dev/null 2>&1 || docker network create koom-net
+            echo "::endgroup::"
+
+            echo "::group::Starting new container"
+            docker run -d \
+              --name koom-calls-server \
+              --restart unless-stopped \
+              --network koom-net \
+              -p 8080:8080 \
+              --env-file .env \
+              "$IMAGE"
+            echo "::endgroup::"
+
+            echo "::group::Waiting for health check"
+            for i in $(seq 1 30); do
+              if curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
+                echo "Backend healthy after ${i}s"
+                break
+              fi
+              sleep 1
+            done
+            if ! curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
+              echo "::error::Backend did not become healthy within 30s"
+              docker logs --tail 50 koom-calls-server || true
+              exit 1
+            fi
+            echo "::endgroup::"
+
+            echo "Deploy completed: $(docker inspect --format '{{.Image}}' koom-calls-server)"
