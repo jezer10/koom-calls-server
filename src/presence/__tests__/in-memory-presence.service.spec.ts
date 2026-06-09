@@ -4,7 +4,7 @@ describe('InMemoryPresenceService', () => {
   let service: InMemoryPresenceService;
 
   beforeEach(() => {
-    service = new InMemoryPresenceService({});
+    service = new InMemoryPresenceService(60);
   });
 
   afterEach(() => {

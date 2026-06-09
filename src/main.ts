@@ -1,22 +1,32 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule, SocketIoRedisAdapter } from './app.module';
-import { loadConfig } from './config/app.config';
 
 export interface BootstrapOptions {
   enablePeerServer?: boolean;
 }
 
+function parseCorsOrigin(raw: string | string[] | undefined): string | string[] {
+  if (raw === undefined) return '*';
+  return raw;
+}
+
 export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
-  const config = loadConfig();
   const logger = new Logger('Bootstrap');
   const enablePeer = options.enablePeerServer ?? false;
 
   const app = await NestFactory.create(AppModule, {
-    cors: {
-      origin: config.signaling.corsOrigin,
-      credentials: true,
-    },
+    cors: false,
+  });
+
+  const configService = app.get(ConfigService);
+  const corsOrigin = parseCorsOrigin(
+    configService.get<string | string[]>('CORS_ORIGIN'),
+  );
+  app.enableCors({
+    origin: corsOrigin,
+    credentials: true,
   });
 
   app.useWebSocketAdapter(app.get(SocketIoRedisAdapter));
@@ -37,10 +47,11 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
       }) => unknown;
     };
     peerModule.startPeerServer({
-      port: config.peer.port,
-      key: config.peer.key,
-      path: config.peer.path,
-      allowDiscovery: config.peer.allowDiscovery,
+      port: configService.getOrThrow<number>('PEER_PORT'),
+      key: configService.getOrThrow<string>('PEER_KEY'),
+      path: configService.getOrThrow<string>('PEER_PATH'),
+      allowDiscovery:
+        configService.getOrThrow<boolean>('PEER_ALLOW_DISCOVERY'),
       logger: (line: string) => logger.log(`[peerjs] ${line}`),
       errorLogger: (line: string) => logger.error(`[peerjs] ${line}`),
       exitLogger: (code: number | null) =>
@@ -48,13 +59,16 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
     });
   }
 
-  await app.listen(config.httpPort);
-
-  logger.log(
-    `Signaling server listening on http://localhost:${config.httpPort}`,
+  const httpPort = configService.getOrThrow<number>('PORT');
+  const signalingNamespace = configService.getOrThrow<string>(
+    'SIGNALING_NAMESPACE',
   );
+
+  await app.listen(httpPort);
+
+  logger.log(`Signaling server listening on http://localhost:${httpPort}`);
   logger.log(
-    `Socket.IO signaling: ${config.signaling.namespace} (path /socket.io)`,
+    `Socket.IO signaling: ${signalingNamespace} (path /socket.io)`,
   );
 }
 

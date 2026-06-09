@@ -33,15 +33,14 @@ export interface AppConfig {
   };
 }
 
-function parseInt10(value: string | undefined, fallback: number): number {
-  if (value === undefined || value === '') return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
+let peerWarned = false;
 
-function parseBool(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined || value === '') return fallback;
-  return value === '1' || value.toLowerCase() === 'true';
+function warnPeerDeprecation(): void {
+  if (peerWarned) return;
+  peerWarned = true;
+  console.warn(
+    '[deprecated] PEER_ENABLED will be removed. Use LiveKit (M3).',
+  );
 }
 
 function parseList(value: string | undefined, fallback: string[]): string[] {
@@ -52,72 +51,36 @@ function parseList(value: string | undefined, fallback: string[]): string[] {
     .filter((entry) => entry.length > 0);
 }
 
-function isProduction(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.NODE_ENV === 'production';
-}
-
-let peerWarned = false;
-
-/**
- * @deprecated Prefer injecting `ConfigService` (from `@nestjs/config`) and
- * reading values via `cfg.get('KEY')` / `cfg.getOrThrow('KEY')`. This
- * function is kept for backwards compatibility with code paths that have
- * not yet been migrated (e.g. `main.ts` bootstrap and a few legacy unit
- * tests). New code must not call `loadConfig()`.
- */
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const parsed = parseEnv(env);
+export function buildAppConfig(parsed: ParsedEnv, env: NodeJS.ProcessEnv): AppConfig {
   const peerEnabled = env.SKIP_PEER !== '1';
-  if (peerEnabled && !peerWarned) {
-    peerWarned = true;
-    console.warn(
-      '[deprecated] PEER_ENABLED will be removed. Use LiveKit (M3).',
-    );
-  }
-
-  const production = isProduction(env);
-  const jwtSecret = env.JWT_SECRET ?? parsed.JWT_SECRET;
-  if (production && !env.JWT_SECRET) {
-    throw new Error('JWT_SECRET is required in production');
-  }
-
-  const turnUrl = env.TURN_URL ?? parsed.TURN_URL;
-  if (!turnUrl && production) {
-    throw new Error('TURN_URL is required in production');
-  }
-  const turnSharedSecret = env.TURN_SHARED_SECRET ?? parsed.TURN_SHARED_SECRET;
-  if (production && !env.TURN_SHARED_SECRET) {
-    throw new Error('TURN_SHARED_SECRET is required in production');
-  }
-
+  if (peerEnabled) warnPeerDeprecation();
   return {
-    httpPort: parseInt10(env.PORT, parsed.PORT),
+    httpPort: parsed.PORT,
     peer: {
       enabled: peerEnabled,
-      port: parseInt10(env.PEER_PORT, parsed.PEER_PORT),
-      key: env.PEER_KEY ?? parsed.PEER_KEY,
-      path: env.PEER_PATH ?? parsed.PEER_PATH,
-      allowDiscovery: parseBool(
-        env.PEER_ALLOW_DISCOVERY,
-        parsed.PEER_ALLOW_DISCOVERY,
-      ),
+      port: parsed.PEER_PORT,
+      key: parsed.PEER_KEY,
+      path: parsed.PEER_PATH,
+      allowDiscovery: parsed.PEER_ALLOW_DISCOVERY,
     },
     signaling: {
-      namespace: env.SIGNALING_NAMESPACE ?? parsed.SIGNALING_NAMESPACE,
-      corsOrigin: env.CORS_ORIGIN ?? parsed.CORS_ORIGIN,
+      namespace: parsed.SIGNALING_NAMESPACE,
+      corsOrigin: parsed.CORS_ORIGIN,
     },
     env: parsed,
     jwt: {
-      secret: jwtSecret,
-      audience: env.JWT_AUDIENCE,
-      issuer: env.JWT_ISSUER,
+      secret: parsed.JWT_SECRET,
+      audience: parsed.JWT_AUDIENCE,
+      issuer: parsed.JWT_ISSUER,
     },
     turn: {
-      url: turnUrl || 'turn:localhost:3478',
-      sharedSecret: turnSharedSecret,
-      ttlSeconds: parseInt10(env.TURN_TTL, parsed.TURN_TTL),
-      realm: env.TURN_REALM ?? 'koom.local',
-      stunUrls: parseList(env.TURN_STUN_URLS, ['stun:stun.l.google.com:19302']),
+      url: parsed.TURN_URL || 'turn:localhost:3478',
+      sharedSecret: parsed.TURN_SHARED_SECRET,
+      ttlSeconds: parsed.TURN_TTL,
+      realm: 'koom.local',
+      stunUrls: parseList(env.TURN_STUN_URLS, [
+        'stun:stun.l.google.com:19302',
+      ]),
     },
   };
 }

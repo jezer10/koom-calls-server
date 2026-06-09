@@ -18,13 +18,9 @@ export interface PresenceService {
   socketsForUser(userId: string): Promise<Set<string>>;
 }
 
-export function resolvePresenceTtl(
-  env: NodeJS.ProcessEnv = process.env,
-): number {
-  const raw = env.PRESENCE_TTL_SECONDS;
-  if (raw === undefined || raw === '') return DEFAULT_PRESENCE_TTL_SECONDS;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_PRESENCE_TTL_SECONDS;
+export function resolvePresenceTtl(ttl?: number | null): number {
+  if (ttl === undefined || ttl === null || !Number.isFinite(ttl) || ttl <= 0) {
+    return DEFAULT_PRESENCE_TTL_SECONDS;
+  }
+  return Math.trunc(ttl);
 }

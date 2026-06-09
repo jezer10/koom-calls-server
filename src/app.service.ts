@@ -1,26 +1,29 @@
 import { Injectable } from '@nestjs/common';
-import { loadConfig } from './config/app.config';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AppService {
-  private readonly config = loadConfig();
+  constructor(private readonly configService: ConfigService) {}
 
   getHello(): string {
     return 'Koom Calls signaling server';
   }
 
   getInfo() {
+    const signalingNamespace = this.configService.getOrThrow<string>(
+      'SIGNALING_NAMESPACE',
+    );
     return {
       name: 'koom-calls-server',
       version: '0.0.1',
       signaling: {
-        namespace: this.config.signaling.namespace,
+        namespace: signalingNamespace,
       },
       peer: {
-        enabled: this.config.peer.enabled,
-        port: this.config.peer.port,
-        path: this.config.peer.path,
-        key: this.config.peer.key,
+        enabled: this.configService.get<string>('SKIP_PEER') !== '1',
+        port: this.configService.getOrThrow<number>('PEER_PORT'),
+        path: this.configService.getOrThrow<string>('PEER_PATH'),
+        key: this.configService.getOrThrow<string>('PEER_KEY'),
       },
     };
   }

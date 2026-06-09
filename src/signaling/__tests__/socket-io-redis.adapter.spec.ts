@@ -34,7 +34,6 @@ jest.mock('@socket.io/redis-adapter', () => ({
 }));
 
 describe('SocketIoRedisAdapter', () => {
-  const ORIGINAL_REDIS_URL = process.env.REDIS_URL;
   let RedisMock: jest.Mock;
 
   beforeEach(() => {
@@ -54,15 +53,6 @@ describe('SocketIoRedisAdapter', () => {
       };
       return instance;
     });
-    delete process.env.REDIS_URL;
-  });
-
-  afterAll(() => {
-    if (ORIGINAL_REDIS_URL === undefined) {
-      delete process.env.REDIS_URL;
-    } else {
-      process.env.REDIS_URL = ORIGINAL_REDIS_URL;
-    }
   });
 
   function buildAdapter(options?: { redisUrl?: string }): SocketIoRedisAdapter {
@@ -90,7 +80,7 @@ describe('SocketIoRedisAdapter', () => {
     expect(adapter).toBeInstanceOf(IoAdapter);
   });
 
-  it('returns the plain io server (no redis adapter) when REDIS_URL is not set', () => {
+  it('returns the plain io server (no redis adapter) when no redisUrl is given', () => {
     const adapter = buildAdapter();
     const { server, adapter: adapterFn } = buildServerDouble();
     const superSpy = spyOnSuper(server);
@@ -106,7 +96,7 @@ describe('SocketIoRedisAdapter', () => {
     superSpy.mockRestore();
   });
 
-  it('attaches a redis adapter when REDIS_URL is provided via constructor options', () => {
+  it('attaches a redis adapter when redisUrl is provided via constructor options', () => {
     const pubInstance: FakeRedisInstance = {
       __isRedisClient: true,
       kind: 'pub',
@@ -128,20 +118,6 @@ describe('SocketIoRedisAdapter', () => {
     expect(createAdapterSpy).toHaveBeenCalledTimes(1);
     expect(adapterFn).toHaveBeenCalledTimes(1);
     expect(adapterFn).toHaveBeenCalledWith(expect.any(Function));
-
-    superSpy.mockRestore();
-  });
-
-  it('attaches a redis adapter when REDIS_URL is provided via env', () => {
-    process.env.REDIS_URL = 'redis://from-env:6379';
-    const adapter = buildAdapter();
-    const { server, adapter: adapterFn } = buildServerDouble();
-    const superSpy = spyOnSuper(server);
-
-    adapter.createIOServer(0);
-
-    expect(RedisMock).toHaveBeenCalledWith('redis://from-env:6379');
-    expect(adapterFn).toHaveBeenCalledTimes(1);
 
     superSpy.mockRestore();
   });

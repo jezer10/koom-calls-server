@@ -142,6 +142,8 @@ describe('parseEnv', () => {
         const env: NodeJS.ProcessEnv = { NODE_ENV: value };
         if (value === 'production') {
           env['JWT_SECRET'] = 'prod';
+          env['TURN_URL'] = 'turn:turn.example.com:3478';
+          env['TURN_SHARED_SECRET'] = 'turn-secret';
         }
         expect(parseEnv(env).NODE_ENV).toBe(value);
       },
@@ -185,6 +187,8 @@ describe('parseEnv', () => {
       const parsed = parseEnv({
         NODE_ENV: 'production',
         JWT_SECRET: 'prod-secret',
+        TURN_URL: 'turn:turn.example.com:3478',
+        TURN_SHARED_SECRET: 'turn-secret',
       });
       expect(parsed.JWT_SECRET).toBe('prod-secret');
     });
@@ -231,6 +235,8 @@ describe('parseEnv', () => {
       const parsed = parseEnv({
         NODE_ENV: 'production',
         JWT_SECRET: 'prod',
+        TURN_URL: 'turn:turn.example.com:3478',
+        TURN_SHARED_SECRET: 'turn-secret',
         UNKNOWN: 'x',
       });
       expect(parsed.NODE_ENV).toBe('production');

@@ -124,8 +124,26 @@ export function buildEnvSchema(
       RATE_LIMIT_USER_BURST: numberFromString(3),
       RATE_LIMIT_IP_BURST: numberFromString(8),
       SFU_TOKEN_TTL_SECONDS: numberFromString(3600),
+      PRESENCE_TTL_SECONDS: numberFromString(60),
       LOG_LEVEL: z.string().default('debug'),
       NODE_ENV: nodeEnvField,
+    })
+    .superRefine((data, ctx) => {
+      if (data.NODE_ENV !== 'production') return;
+      if (!data.TURN_URL) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TURN_URL'],
+          message: 'TURN_URL is required in production',
+        });
+      }
+      if (!data.TURN_SHARED_SECRET) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TURN_SHARED_SECRET'],
+          message: 'TURN_SHARED_SECRET is required in production',
+        });
+      }
     })
     .passthrough();
 }
@@ -161,6 +179,7 @@ export type ParsedEnv = {
   RATE_LIMIT_USER_BURST: number;
   RATE_LIMIT_IP_BURST: number;
   SFU_TOKEN_TTL_SECONDS: number;
+  PRESENCE_TTL_SECONDS: number;
   LOG_LEVEL: string;
   NODE_ENV: NodeEnv;
 };
@@ -236,6 +255,7 @@ function pickParsed(raw: Record<string, unknown>): ParsedEnv {
     RATE_LIMIT_USER_BURST: raw['RATE_LIMIT_USER_BURST'] as number,
     RATE_LIMIT_IP_BURST: raw['RATE_LIMIT_IP_BURST'] as number,
     SFU_TOKEN_TTL_SECONDS: raw['SFU_TOKEN_TTL_SECONDS'] as number,
+    PRESENCE_TTL_SECONDS: raw['PRESENCE_TTL_SECONDS'] as number,
     LOG_LEVEL: raw['LOG_LEVEL'] as string,
     NODE_ENV: raw['NODE_ENV'] as NodeEnv,
   };

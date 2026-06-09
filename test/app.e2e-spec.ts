@@ -3,7 +3,8 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { loadConfig } from '../src/config/app.config';
+import { buildAppConfig } from '../src/config/app.config';
+import { parseEnv } from '../src/config/env.schema';
 
 interface InfoResponse {
   name: string;
@@ -20,7 +21,7 @@ interface HealthResponse {
 
 describe('REST endpoints (e2e)', () => {
   let app: INestApplication;
-  const config = loadConfig();
+  const config = buildAppConfig(parseEnv(process.env), process.env);
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({

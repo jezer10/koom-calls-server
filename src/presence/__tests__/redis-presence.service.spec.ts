@@ -7,7 +7,7 @@ describe('RedisPresenceService', () => {
 
   beforeEach(() => {
     redis = new RedisMock();
-    service = new RedisPresenceService(redis, {});
+    service = new RedisPresenceService(redis, 60);
   });
 
   afterEach(async () => {

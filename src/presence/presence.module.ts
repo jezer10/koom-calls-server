@@ -13,11 +13,14 @@ import { RedisPresenceService } from './redis-presence.service';
       inject: [ConfigService],
       useFactory: (configService: ConfigService): PresenceService => {
         const url = configService.get<string>('REDIS_URL') ?? '';
+        const defaultTtl = configService.getOrThrow<number>(
+          'PRESENCE_TTL_SECONDS',
+        );
         if (url.trim() === '') {
-          return new InMemoryPresenceService();
+          return new InMemoryPresenceService(defaultTtl);
         }
         const client = createRedisClient({ url });
-        return new RedisPresenceService(client);
+        return new RedisPresenceService(client, defaultTtl);
       },
     },
   ],

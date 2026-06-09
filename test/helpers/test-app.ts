@@ -3,7 +3,8 @@ import { INestApplication } from '@nestjs/common';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { AppModule } from '../../src/app.module';
-import { loadConfig } from '../../src/config/app.config';
+import { buildAppConfig } from '../../src/config/app.config';
+import { parseEnv } from '../../src/config/env.schema';
 import { CallsService, CallEventsStore } from '../../src/calls/calls.service';
 import {
   TURN_SERVICE,
@@ -51,7 +52,7 @@ const wait = (ms: number) =>
 export async function bootstrapTestApp(
   options: BootstrapTestAppOptions = {},
 ): Promise<BootstrappedApp> {
-  const config = loadConfig();
+  const config = buildAppConfig(parseEnv(process.env), process.env);
   // Make JWT secret deterministic for the test session.
   process.env.JWT_SECRET = process.env.JWT_SECRET ?? config.jwt.secret;
   process.env.JWT_ISSUER = process.env.JWT_ISSUER ?? config.jwt.issuer;

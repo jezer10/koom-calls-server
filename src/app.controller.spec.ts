@@ -1,6 +1,23 @@
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+
+const stubConfig: Record<string, string | number | boolean> = {
+  SIGNALING_NAMESPACE: '/signaling',
+  PEER_PORT: 9000,
+  PEER_KEY: 'peerjs',
+  PEER_PATH: '/',
+  PEER_ALLOW_DISCOVERY: false,
+};
+
+const stubConfigService: Partial<ConfigService> = {
+  get: <T = unknown>(key: string): T | undefined => stubConfig[key] as T | undefined,
+  getOrThrow: <T = unknown>(key: string): T => {
+    if (key in stubConfig) return stubConfig[key] as T;
+    throw new Error(`unexpected key ${key}`);
+  },
+};
 
 describe('AppController', () => {
   let controller: AppController;
@@ -9,7 +26,10 @@ describe('AppController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [AppService],
+      providers: [
+        AppService,
+        { provide: ConfigService, useValue: stubConfigService },
+      ],
     }).compile();
 
     controller = app.get<AppController>(AppController);

@@ -19,10 +19,26 @@ describe('bootstrap()', () => {
   beforeEach(() => {
     startPeerServerMock.mockClear();
     listenSpy = jest.fn().mockResolvedValue(undefined);
+    const fakeConfigService = {
+      get: jest.fn((key: string) => {
+        if (key === 'CORS_ORIGIN') return '*';
+        return undefined;
+      }),
+      getOrThrow: jest.fn((key: string) => {
+        if (key === 'PORT') return 8080;
+        if (key === 'SIGNALING_NAMESPACE') return '/signaling';
+        if (key === 'PEER_PORT') return 9000;
+        if (key === 'PEER_KEY') return 'peerjs';
+        if (key === 'PEER_PATH') return '/';
+        if (key === 'PEER_ALLOW_DISCOVERY') return false;
+        throw new Error(`unexpected key ${key}`);
+      }),
+    };
     const fakeApp = {
       listen: listenSpy,
-      get: jest.fn().mockReturnValue({}),
+      get: jest.fn().mockReturnValue(fakeConfigService),
       useWebSocketAdapter: jest.fn(),
+      enableCors: jest.fn(),
     };
     createSpy = jest
       .spyOn(NestFactory, 'create')

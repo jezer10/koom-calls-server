@@ -24,9 +24,9 @@ export class RedisPresenceService implements PresenceService, OnModuleDestroy {
 
   constructor(
     private readonly redis: Redis,
-    env: NodeJS.ProcessEnv = process.env,
+    defaultTtlSeconds?: number | null,
   ) {
-    this.defaultTtlSeconds = resolvePresenceTtl(env);
+    this.defaultTtlSeconds = resolvePresenceTtl(defaultTtlSeconds);
   }
 
   async markOnline(

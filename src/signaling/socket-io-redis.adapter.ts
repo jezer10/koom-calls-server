@@ -12,9 +12,10 @@ export class SocketIoRedisAdapter extends IoAdapter {
 
   constructor(app?: object, options: SocketIoRedisAdapterOptions = {}) {
     super(app);
-    const envUrl = process.env.REDIS_URL;
     this.redisUrl =
-      options.redisUrl ?? (envUrl && envUrl.length > 0 ? envUrl : undefined);
+      options.redisUrl && options.redisUrl.length > 0
+        ? options.redisUrl
+        : undefined;
   }
 
   createIOServer(port: number, options?: ServerOptions): IoServer {

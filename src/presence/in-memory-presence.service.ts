@@ -16,8 +16,8 @@ export class InMemoryPresenceService
   private readonly callTtl = new Map<string, TtlEntry>();
   private readonly defaultTtlSeconds: number;
 
-  constructor(env: NodeJS.ProcessEnv = process.env) {
-    this.defaultTtlSeconds = resolvePresenceTtl(env);
+  constructor(defaultTtlSeconds?: number | null) {
+    this.defaultTtlSeconds = resolvePresenceTtl(defaultTtlSeconds);
   }
 
   markOnline(
