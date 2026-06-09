@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -18,11 +19,17 @@ import {
   SignalingAdapterModule,
   SocketIoRedisAdapter,
 } from './signaling/signaling.adapter.module';
+import { parseEnv } from './config/env.schema';
 
 export { SocketIoRedisAdapter };
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      ignoreEnvFile: true,
+      validate: (env) => parseEnv(env, { onWarning: console.warn }),
+    }),
     AuthModule,
     CallsModule,
     SignalingModule,
