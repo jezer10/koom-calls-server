@@ -58,6 +58,13 @@ function isProduction(env: NodeJS.ProcessEnv = process.env): boolean {
 
 let peerWarned = false;
 
+/**
+ * @deprecated Prefer injecting `ConfigService` (from `@nestjs/config`) and
+ * reading values via `cfg.get('KEY')` / `cfg.getOrThrow('KEY')`. This
+ * function is kept for backwards compatibility with code paths that have
+ * not yet been migrated (e.g. `main.ts` bootstrap and a few legacy unit
+ * tests). New code must not call `loadConfig()`.
+ */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = parseEnv(env);
   const peerEnabled = env.SKIP_PEER !== '1';
