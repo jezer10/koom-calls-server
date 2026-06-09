@@ -1,34 +1,48 @@
-import { Injectable, Logger } from '@nestjs/common';
 import type {
-  AccessTokenResult,
   CreateAccessTokenArgs,
+  CreateAccessTokenResult,
+  CreateRoomResult,
   MediaProvider,
 } from './media-provider.interface';
+import { roomNameForCall } from './media-provider.interface';
 
-@Injectable()
+const NOOP_URL = 'noop://localhost';
+const NOOP_TOKEN_TTL_SECONDS = 60 * 60;
+
 export class NoopMediaProvider implements MediaProvider {
-  private readonly logger = new Logger(NoopMediaProvider.name);
-  private readonly createdAt = Date.now();
+  private readonly url: string;
+  private readonly ttlSeconds: number;
 
-  createRoom(callId: string): Promise<{ roomName: string }> {
-    this.logger.debug(`[noop] createRoom(${callId})`);
-    return Promise.resolve({ roomName: `room-${callId}` });
+  constructor(options: { url?: string; ttlSeconds?: number } = {}) {
+    this.url = options.url ?? NOOP_URL;
+    this.ttlSeconds = options.ttlSeconds ?? NOOP_TOKEN_TTL_SECONDS;
   }
 
-  deleteRoom(callId: string): Promise<void> {
-    this.logger.debug(`[noop] deleteRoom(${callId})`);
+  createRoom(callId: string): Promise<CreateRoomResult> {
+    const roomName = roomNameForCall(callId);
+    return Promise.resolve({
+      roomName,
+      providerRoomId: `noop-${callId}`,
+    });
+  }
+
+  deleteRoom(_callId: string): Promise<void> {
     return Promise.resolve();
   }
 
-  createAccessToken(args: CreateAccessTokenArgs): Promise<AccessTokenResult> {
-    this.logger.debug(
-      `[noop] createAccessToken(user=${args.userId} call=${args.callId} role=${args.role})`,
-    );
-    const token = `noop-token-${this.createdAt}-${args.userId}-${args.callId}-${args.role}`;
+  createAccessToken(
+    args: CreateAccessTokenArgs,
+  ): Promise<CreateAccessTokenResult> {
+    const ttlSeconds = args.ttlSeconds ?? this.ttlSeconds;
+    const token = `noop-token:${args.userId}:${args.callId}:${args.role}`;
     return Promise.resolve({
       token,
-      url: `https://noop.invalid/${args.callId}?token=${token}`,
-      expiresAt: new Date(this.createdAt + 60 * 60 * 1000),
+      url: this.url,
+      expiresAt: new Date(Date.now() + ttlSeconds * 1000),
     });
+  }
+
+  validateWebhook(_payload: unknown, _signature: string): boolean {
+    return false;
   }
 }

@@ -1,63 +1,62 @@
-import { Logger } from '@nestjs/common';
 import { NoopMediaProvider } from '../noop.media-provider';
+import type { MediaProvider } from '../media-provider.interface';
 
 describe('NoopMediaProvider', () => {
-  let provider: NoopMediaProvider;
-  let debugSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    provider = new NoopMediaProvider();
-    debugSpy = jest
-      .spyOn(Logger.prototype, 'debug')
-      .mockImplementation(() => undefined);
-  });
-
-  afterEach(() => {
-    debugSpy.mockRestore();
-  });
-
-  it('creates a deterministic room name from the callId', async () => {
-    await expect(provider.createRoom('call-42')).resolves.toEqual({
-      roomName: 'room-call-42',
+  it('createRoom returns deterministic fake values', async () => {
+    const provider: MediaProvider = new NoopMediaProvider();
+    const result = await provider.createRoom('call-1');
+    expect(result).toEqual({
+      roomName: 'koom-call-call-1',
+      providerRoomId: 'noop-call-1',
     });
-    expect(debugSpy).toHaveBeenCalledWith('[noop] createRoom(call-42)');
   });
 
-  it('deleteRoom resolves and logs a debug line', async () => {
-    await expect(provider.deleteRoom('call-42')).resolves.toBeUndefined();
-    expect(debugSpy).toHaveBeenCalledWith('[noop] deleteRoom(call-42)');
+  it('createRoom is stable across calls for the same id', async () => {
+    const provider = new NoopMediaProvider();
+    const a = await provider.createRoom('call-2');
+    const b = await provider.createRoom('call-2');
+    expect(a).toEqual(b);
   });
 
-  it('mints a deterministic access token for a given user/call/role', async () => {
-    const a = await provider.createAccessToken({
-      userId: 'alice',
+  it('deleteRoom resolves with no side effects', async () => {
+    const provider = new NoopMediaProvider();
+    await expect(provider.deleteRoom('call-1')).resolves.toBeUndefined();
+  });
+
+  it('createAccessToken returns a deterministic token and future expiresAt', async () => {
+    const provider = new NoopMediaProvider();
+    const before = Date.now();
+    const result = await provider.createAccessToken({
+      userId: 'u-1',
       callId: 'call-1',
       role: 'host',
+      ttlSeconds: 30,
     });
-    const b = await provider.createAccessToken({
-      userId: 'alice',
-      callId: 'call-1',
-      role: 'host',
-    });
-    expect(a.token).toBe(b.token);
-    expect(a.url).toBe(b.url);
-    expect(a.token).toMatch(/^noop-token-/);
-    expect(a.url).toContain(a.token);
-    expect(a.expiresAt).toBeInstanceOf(Date);
-    expect(a.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(result.token).toBe('noop-token:u-1:call-1:host');
+    expect(result.url).toMatch(/^noop:\/\//);
+    expect(result.expiresAt).toBeInstanceOf(Date);
+    const expectedExpiresAt = before + 30 * 1000;
+    expect(
+      Math.abs(result.expiresAt.getTime() - expectedExpiresAt),
+    ).toBeLessThan(1000);
   });
 
-  it('produces different tokens for different roles/users', async () => {
-    const host = await provider.createAccessToken({
-      userId: 'alice',
-      callId: 'call-1',
-      role: 'host',
-    });
-    const guest = await provider.createAccessToken({
-      userId: 'bob',
-      callId: 'call-1',
+  it('createAccessToken defaults to a 1h TTL when none given', async () => {
+    const provider = new NoopMediaProvider();
+    const before = Date.now();
+    const result = await provider.createAccessToken({
+      userId: 'u',
+      callId: 'c',
       role: 'participant',
     });
-    expect(host.token).not.toBe(guest.token);
+    expect(result.expiresAt.getTime()).toBeGreaterThanOrEqual(
+      before + 60 * 60 * 1000 - 1000,
+    );
+  });
+
+  it('validateWebhook always returns false', () => {
+    const provider = new NoopMediaProvider();
+    expect(provider.validateWebhook?.('payload', 'sig')).toBe(false);
+    expect(provider.validateWebhook?.({ event: 'x' }, 'sig')).toBe(false);
   });
 });
