@@ -4,6 +4,7 @@ import {
   Module,
   type OnApplicationBootstrap,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MEDIA_PROVIDER, type MediaProvider } from './media-provider.interface';
 import { LiveKitMediaProvider } from './livekit.media-provider';
 import { NoopMediaProvider } from './noop.media-provider';
@@ -20,11 +21,11 @@ export interface MediaProviderEnv {
 }
 
 export function readMediaProviderEnv(
-  env: NodeJS.ProcessEnv = process.env,
+  source: Partial<Record<'LIVEKIT_URL' | 'LIVEKIT_API_KEY' | 'LIVEKIT_API_SECRET', string | undefined>> = {},
 ): MediaProviderEnv {
-  const url = env[LIVEKIT_URL_ENV];
-  const apiKey = env[LIVEKIT_API_KEY_ENV];
-  const apiSecret = env[LIVEKIT_API_SECRET_ENV];
+  const url = source.LIVEKIT_URL;
+  const apiKey = source.LIVEKIT_API_KEY;
+  const apiSecret = source.LIVEKIT_API_SECRET;
   if (!url || !apiKey || !apiSecret) {
     return {};
   }
@@ -49,8 +50,17 @@ export function selectMediaProvider(env: MediaProviderEnv): MediaProvider {
   providers: [
     {
       provide: MEDIA_PROVIDER,
-      useFactory: (): MediaProvider =>
-        selectMediaProvider(readMediaProviderEnv()),
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): MediaProvider =>
+        selectMediaProvider(
+          readMediaProviderEnv({
+            LIVEKIT_URL: configService.get<string>('LIVEKIT_URL'),
+            LIVEKIT_API_KEY: configService.get<string>('LIVEKIT_API_KEY'),
+            LIVEKIT_API_SECRET: configService.get<string>(
+              'LIVEKIT_API_SECRET',
+            ),
+          }),
+        ),
     },
   ],
   exports: [MEDIA_PROVIDER],
@@ -58,8 +68,14 @@ export function selectMediaProvider(env: MediaProviderEnv): MediaProvider {
 export class MediaProviderModule implements OnApplicationBootstrap {
   private readonly logger = new Logger(MediaProviderModule.name);
 
+  constructor(private readonly configService: ConfigService) {}
+
   onApplicationBootstrap(): void {
-    const env = readMediaProviderEnv();
+    const env = readMediaProviderEnv({
+      LIVEKIT_URL: this.configService.get<string>('LIVEKIT_URL'),
+      LIVEKIT_API_KEY: this.configService.get<string>('LIVEKIT_API_KEY'),
+      LIVEKIT_API_SECRET: this.configService.get<string>('LIVEKIT_API_SECRET'),
+    });
     if (env.url && env.apiKey && env.apiSecret) {
       this.logger.log(
         `MediaProvider: LiveKit (url=${env.url}, key=${env.apiKey})`,

@@ -1,21 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as crypto from 'node:crypto';
 import {
   TurnCredentials,
   TurnCredentialsOptions,
   TurnService,
 } from './turn.types';
-import { loadConfig } from '../config/app.config';
 
 @Injectable()
 export class StaticTurnService implements TurnService {
   private readonly logger = new Logger(StaticTurnService.name);
   private readonly ttlSeconds = 3600;
   private readonly urls: string[];
+  private readonly jwtSecret: string;
 
-  constructor() {
-    const raw = process.env.TURN_URLS;
-    if (raw && raw.length > 0) {
+  constructor(configService: ConfigService) {
+    this.jwtSecret = configService.getOrThrow<string>('JWT_SECRET');
+    const raw = configService.get<string>('TURN_URLS') ?? '';
+    if (raw.length > 0) {
       this.urls = raw
         .split(',')
         .map((u) => u.trim())
@@ -45,9 +47,8 @@ export class StaticTurnService implements TurnService {
   }
 
   private hmac(input: string, expiresAt: number): string {
-    const config = loadConfig();
     return crypto
-      .createHmac('sha1', config.jwt.secret)
+      .createHmac('sha1', this.jwtSecret)
       .update(`${input}:${expiresAt}`)
       .digest('base64');
   }
