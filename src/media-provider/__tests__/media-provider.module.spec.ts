@@ -17,7 +17,8 @@ import {
 
 function buildModule(values: Record<string, string>) {
   const configService: Partial<ConfigService> = {
-    get: <T = string>(key: string): T | undefined => values[key] as unknown as T,
+    get: <T = string>(key: string): T | undefined =>
+      values[key] as unknown as T,
   };
   return Test.createTestingModule({
     imports: [
@@ -56,6 +57,7 @@ describe('media-provider module', () => {
       };
       expect(readMediaProviderEnv(env)).toEqual({
         url: 'wss://livekit',
+        httpUrl: 'https://livekit',
         apiKey: 'key',
         apiSecret: 'secret',
       });
