@@ -1,4 +1,5 @@
 import { WsException } from '@nestjs/websockets';
+import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import type * as Io from 'socket.io';
 import { SignalingGateway } from '../signaling.gateway';
@@ -9,15 +10,21 @@ import {
 } from '../calls-event-bus';
 
 const JWT_SECRET = 'gateway-test-secret';
-const originalSecret = process.env.JWT_SECRET;
 
-beforeAll(() => {
-  process.env.JWT_SECRET = JWT_SECRET;
-});
-afterAll(() => {
-  if (originalSecret === undefined) delete process.env.JWT_SECRET;
-  else process.env.JWT_SECRET = originalSecret;
-});
+function makeConfigService(): ConfigService {
+  const values: Record<string, string> = {
+    JWT_SECRET,
+    SIGNALING_NAMESPACE: '/signaling',
+    CORS_ORIGIN: '*',
+  };
+  return {
+    getOrThrow: <T = string>(key: string): T => {
+      if (key in values) return values[key] as unknown as T;
+      throw new Error(`unexpected key ${key}`);
+    },
+    get: <T = string>(key: string): T | undefined => values[key] as unknown as T,
+  } as unknown as ConfigService;
+}
 
 class FakeCallsEventBus implements CallsEventBus {
   events: Array<{ callId: string; event: string; actorUserId: string }> = [];
@@ -107,7 +114,7 @@ function setupContext(): TestContext {
     return true;
   });
 
-  const gateway = new SignalingGateway(registry, bus);
+  const gateway = new SignalingGateway(registry, bus, makeConfigService());
   gateway.server = ns as unknown as Io.Namespace;
 
   const makeSocket = (
