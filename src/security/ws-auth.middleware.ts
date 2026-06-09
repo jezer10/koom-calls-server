@@ -5,6 +5,7 @@ import {
   Optional,
   Inject,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Server as IoServer, Socket as IoSocket } from 'socket.io';
 import {
   verify,
@@ -14,8 +15,6 @@ import {
   SignOptions,
 } from 'jsonwebtoken';
 import { z } from 'zod';
-
-export const DEFAULT_JWT_SECRET = 'dev-secret-change-me';
 
 export const WsAuthMiddlewareOptions = 'WS_AUTH_MIDDLEWARE_OPTIONS';
 
@@ -39,7 +38,7 @@ export const defaultWsAuthOptions: Required<
   audience?: string;
   requiredClaims: ReadonlyArray<string>;
 } = {
-  secret: DEFAULT_JWT_SECRET,
+  secret: '',
   algorithms: ['HS256'],
   clockTolerance: 5,
   userIdClaim: 'sub',
@@ -111,13 +110,14 @@ export class WsAuthMiddleware implements NestMiddleware {
   private readonly requiredClaims: ReadonlyArray<string>;
 
   constructor(
+    configService: ConfigService,
     @Optional() @Inject(WsAuthMiddlewareOptions) options?: WsAuthOptions,
   ) {
     const resolved: WsAuthOptions = {
-      secret: options?.secret ?? process.env.JWT_SECRET ?? DEFAULT_JWT_SECRET,
+      secret: options?.secret ?? configService.getOrThrow<string>('JWT_SECRET'),
       algorithms: options?.algorithms ?? defaultWsAuthOptions.algorithms,
-      issuer: options?.issuer,
-      audience: options?.audience,
+      issuer: options?.issuer ?? configService.get<string>('JWT_ISSUER'),
+      audience: options?.audience ?? configService.get<string>('JWT_AUDIENCE'),
       clockTolerance:
         options?.clockTolerance ?? defaultWsAuthOptions.clockTolerance,
       userIdClaim: options?.userIdClaim ?? defaultWsAuthOptions.userIdClaim,

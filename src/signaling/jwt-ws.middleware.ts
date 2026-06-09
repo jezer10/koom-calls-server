@@ -129,15 +129,17 @@ export class JwtWsMiddleware {
 }
 
 export function defaultJwtSecret(): string {
-  return process.env.JWT_SECRET ?? 'dev-jwt-secret';
+  throw new Error(
+    'defaultJwtSecret() has been removed: callers must inject a secret via ConfigService.',
+  );
 }
 
 export function createJwtWsMiddleware(
-  options?: Partial<JwtWsMiddlewareOptions>,
+  options: JwtWsMiddlewareOptions,
 ): JwtWsMiddleware {
   return new JwtWsMiddleware({
-    secret: options?.secret ?? defaultJwtSecret(),
-    algorithms: options?.algorithms,
-    userIdClaim: options?.userIdClaim,
+    secret: options.secret,
+    algorithms: options.algorithms,
+    userIdClaim: options.userIdClaim,
   });
 }

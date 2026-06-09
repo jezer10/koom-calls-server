@@ -9,8 +9,8 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { Inject, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type * as Io from 'socket.io';
-import { loadConfig } from '../config/app.config';
 import { RoomRegistry } from './room.registry';
 import { RateLimitGuard } from './rate-limit.guard';
 import { type CallsEventBus, CALLS_EVENT_BUS } from './calls-event-bus';
@@ -38,8 +38,6 @@ import type {
   SfuEventAck,
 } from './signaling.types';
 
-const config = loadConfig();
-
 interface SocketData {
   userId?: string;
   token?: string;
@@ -57,10 +55,7 @@ function getUserId(socket: Io.Socket): string {
   throw new WsException('forbidden');
 }
 
-@WebSocketGateway({
-  namespace: config.signaling.namespace,
-  cors: { origin: config.signaling.corsOrigin },
-})
+@WebSocketGateway()
 export class SignalingGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -70,14 +65,23 @@ export class SignalingGateway
   @WebSocketServer()
   server!: Io.Namespace;
 
+  private readonly namespace: string;
+  private readonly corsOrigin: string | string[];
+
   constructor(
     private readonly registry: RoomRegistry,
     @Inject(CALLS_EVENT_BUS) private readonly callsEventBus: CallsEventBus,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.namespace = this.configService.getOrThrow<string>(
+      'SIGNALING_NAMESPACE',
+    );
+    this.corsOrigin = this.configService.get<string>('CORS_ORIGIN') ?? '*';
+  }
 
   afterInit(server: Io.Namespace): void {
     const middleware = new JwtWsMiddleware({
-      secret: process.env.JWT_SECRET ?? config.jwt.secret ?? 'dev-jwt-secret',
+      secret: this.configService.getOrThrow<string>('JWT_SECRET'),
     });
     server.use((socket: Io.Socket, next: (err?: Error) => void) => {
       middleware.use(socket, (err) => {

@@ -1,9 +1,19 @@
-import {
-  WsAuthMiddleware,
-  signTestToken,
-  DEFAULT_JWT_SECRET,
-} from '../ws-auth.middleware';
+import { ConfigService } from '@nestjs/config';
+import { WsAuthMiddleware, signTestToken } from '../ws-auth.middleware';
 import type { SocketLike } from '../ws-auth.middleware';
+
+function makeConfigService(secret: string): ConfigService {
+  return {
+    getOrThrow: <T = string>(key: string): T => {
+      if (key === 'JWT_SECRET') return secret as unknown as T;
+      throw new Error(`unexpected key ${key}`);
+    },
+    get: <T = string>(key: string): T | undefined => {
+      if (key === 'JWT_ISSUER' || key === 'JWT_AUDIENCE') return undefined;
+      throw new Error(`unexpected key ${key}`);
+    },
+  } as unknown as ConfigService;
+}
 
 function makeSocket(overrides: {
   auth?: Record<string, unknown>;
@@ -43,7 +53,7 @@ describe('WsAuthMiddleware', () => {
   let middleware: WsAuthMiddleware;
 
   beforeEach(() => {
-    middleware = new WsAuthMiddleware({ secret: SECRET });
+    middleware = new WsAuthMiddleware(makeConfigService(SECRET));
   });
 
   describe('token acceptance', () => {
@@ -88,22 +98,15 @@ describe('WsAuthMiddleware', () => {
 
     it('uses the configured userIdClaim', () => {
       const token = signTestToken({ uid: 'dave' }, SECRET);
-      const mw = new WsAuthMiddleware({ secret: SECRET, userIdClaim: 'uid' });
+      const mw = new WsAuthMiddleware(makeConfigService(SECRET), {
+        secret: SECRET,
+        userIdClaim: 'uid',
+      });
       const socket = makeSocket({ auth: { token } });
 
       mw.use(socket, makeNext().fn);
 
       expect(socket.data.userId).toBe('dave');
-    });
-
-    it('falls back to default secret when none is provided', () => {
-      const token = signTestToken({ sub: 'eve' }, DEFAULT_JWT_SECRET);
-      const mw = new WsAuthMiddleware();
-      const socket = makeSocket({ auth: { token } });
-
-      mw.use(socket, makeNext().fn);
-
-      expect(socket.data.userId).toBe('eve');
     });
   });
 

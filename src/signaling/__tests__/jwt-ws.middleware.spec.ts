@@ -1,9 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import {
-  JwtWsMiddleware,
-  defaultJwtSecret,
-  createJwtWsMiddleware,
-} from '../jwt-ws.middleware';
+import { JwtWsMiddleware, createJwtWsMiddleware } from '../jwt-ws.middleware';
 
 const SECRET = 'unit-test-secret';
 
@@ -42,32 +38,9 @@ function invoke(
 }
 
 describe('JwtWsMiddleware', () => {
-  describe('defaultJwtSecret()', () => {
-    const original = process.env.JWT_SECRET;
-    afterEach(() => {
-      if (original === undefined) delete process.env.JWT_SECRET;
-      else process.env.JWT_SECRET = original;
-    });
-
-    it('returns process.env.JWT_SECRET when set', () => {
-      process.env.JWT_SECRET = 'env-secret';
-      expect(defaultJwtSecret()).toBe('env-secret');
-    });
-
-    it('falls back to "dev-secret-change-me" when not set', () => {
-      delete process.env.JWT_SECRET;
-      expect(defaultJwtSecret()).toBe('dev-jwt-secret');
-    });
-  });
-
   describe('createJwtWsMiddleware()', () => {
     it('builds a middleware with the provided secret', () => {
       const mw = createJwtWsMiddleware({ secret: 'x' });
-      expect(mw).toBeInstanceOf(JwtWsMiddleware);
-    });
-
-    it('uses the default secret when none is provided', () => {
-      const mw = createJwtWsMiddleware();
       expect(mw).toBeInstanceOf(JwtWsMiddleware);
     });
   });
