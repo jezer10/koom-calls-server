@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { loadConfig } from './config/app.config';
-import { startPeerServer } from './peer/peer-server';
 
 export interface BootstrapOptions {
   enablePeerServer?: boolean;
@@ -11,7 +10,7 @@ export interface BootstrapOptions {
 export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
   const config = loadConfig();
   const logger = new Logger('Bootstrap');
-  const enablePeer = options.enablePeerServer ?? config.peer.enabled;
+  const enablePeer = options.enablePeerServer ?? false;
 
   const app = await NestFactory.create(AppModule, {
     cors: {
@@ -21,14 +20,29 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
   });
 
   if (enablePeer) {
-    startPeerServer({
+    // Lazy-load the legacy PeerJS wiring via require so the _deprecated
+    // module is only pulled in when the legacy path is explicitly enabled.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const peerModule = require('./_deprecated/peer/peer-server') as {
+      startPeerServer: (opts: {
+        port: number;
+        key: string;
+        path: string;
+        allowDiscovery: boolean;
+        logger: (line: string) => void;
+        errorLogger: (line: string) => void;
+        exitLogger: (code: number | null) => void;
+      }) => unknown;
+    };
+    peerModule.startPeerServer({
       port: config.peer.port,
       key: config.peer.key,
       path: config.peer.path,
       allowDiscovery: config.peer.allowDiscovery,
-      logger: (line) => logger.log(`[peerjs] ${line}`),
-      errorLogger: (line) => logger.error(`[peerjs] ${line}`),
-      exitLogger: (code) => logger.error(`[peerjs] exited with code ${code}`),
+      logger: (line: string) => logger.log(`[peerjs] ${line}`),
+      errorLogger: (line: string) => logger.error(`[peerjs] ${line}`),
+      exitLogger: (code: number | null) =>
+        logger.error(`[peerjs] exited with code ${code}`),
     });
   }
 
@@ -40,14 +54,6 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
   logger.log(
     `Socket.IO signaling: ${config.signaling.namespace} (path /socket.io)`,
   );
-  if (enablePeer) {
-    logger.log(
-      `PeerJS broker:  http://localhost:${config.peer.port}${config.peer.path === '/' ? '' : config.peer.path}/${config.peer.key}/id`,
-    );
-    logger.log(
-      `PeerJS WS:      ws://localhost:${config.peer.port}/${config.peer.key}/<id>/<token>?key=${config.peer.key}`,
-    );
-  }
 }
 
 if (require.main === module) {

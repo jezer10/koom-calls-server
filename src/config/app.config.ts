@@ -32,13 +32,24 @@ function parseBool(value: string | undefined, fallback: boolean): boolean {
   return value === '1' || value.toLowerCase() === 'true';
 }
 
+let peerWarned = false;
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = parseEnv(env);
+  const peerEnabled = env.SKIP_PEER !== '1';
+  if (peerEnabled && !peerWarned) {
+    // LBR-67: deprecation notice. The PeerJS broker is being replaced by
+    // LiveKit in M3; warn once at config load when the legacy path is on.
+    peerWarned = true;
+    console.warn(
+      '[deprecated] PEER_ENABLED will be removed. Use LiveKit (M3).',
+    );
+  }
 
   return {
     httpPort: parseInt10(env.PORT, parsed.PORT),
     peer: {
-      enabled: env.SKIP_PEER !== '1',
+      enabled: peerEnabled,
       port: parseInt10(env.PEER_PORT, parsed.PEER_PORT),
       key: env.PEER_KEY ?? parsed.PEER_KEY,
       path: env.PEER_PATH ?? parsed.PEER_PATH,
