@@ -1,17 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as crypto from 'node:crypto';
 import { SfuService, SfuToken, SfuTokenRequest } from './sfu.types';
-import { loadConfig } from '../config/app.config';
 
 @Injectable()
 export class StaticSfuService implements SfuService {
   private readonly logger = new Logger(StaticSfuService.name);
   private readonly ttlSeconds = 1800;
-  private readonly sfuUrl =
-    process.env.SFU_URL ?? 'wss://sfu.koom.example.com/v1/rtc';
+  private readonly sfuUrl: string;
+  private readonly jwtSecret: string;
+
+  constructor(configService: ConfigService) {
+    this.sfuUrl =
+      configService.get<string>('SFU_URL') ?? 'wss://sfu.koom.example.com/v1/rtc';
+    this.jwtSecret = configService.getOrThrow<string>('JWT_SECRET');
+  }
 
   issueToken(req: SfuTokenRequest): SfuToken {
-    const config = loadConfig();
     const issuedAt = Math.floor(Date.now() / 1000);
     const expiresAt = issuedAt + this.ttlSeconds;
     const roomId = this.deriveRoomId(req.callId);
@@ -27,7 +32,7 @@ export class StaticSfuService implements SfuService {
     const base64Header = this.b64url(JSON.stringify(header));
     const base64Payload = this.b64url(JSON.stringify(payload));
     const signature = crypto
-      .createHmac('sha256', config.jwt.secret)
+      .createHmac('sha256', this.jwtSecret)
       .update(`${base64Header}.${base64Payload}`)
       .digest('base64url');
     const token = `${base64Header}.${base64Payload}.${signature}`;
