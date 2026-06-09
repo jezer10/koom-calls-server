@@ -10,7 +10,7 @@ export interface CreateRedisClientOptions {
 export function createRedisClient(
   options: CreateRedisClientOptions = {},
 ): Redis {
-  const url = options.url ?? process.env.REDIS_URL;
+  const url = options.url;
   if (!url) {
     throw new Error('createRedisClient requires a non-empty Redis URL');
   }

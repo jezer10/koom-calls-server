@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InMemoryPresenceService } from './in-memory-presence.service';
 import { PRESENCE_SERVICE } from './presence.tokens';
 import type { PresenceService } from './presence.service';
@@ -9,9 +10,10 @@ import { RedisPresenceService } from './redis-presence.service';
   providers: [
     {
       provide: PRESENCE_SERVICE,
-      useFactory: (): PresenceService => {
-        const url = process.env.REDIS_URL;
-        if (!url || url.trim() === '') {
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): PresenceService => {
+        const url = configService.get<string>('REDIS_URL') ?? '';
+        if (url.trim() === '') {
           return new InMemoryPresenceService();
         }
         const client = createRedisClient({ url });
