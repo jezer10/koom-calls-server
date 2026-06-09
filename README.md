@@ -106,6 +106,76 @@ $ mau deploy
 
 With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
+## TURN (coturn) credentials
+
+The server exposes a JWT-protected endpoint that mints short-lived TURN
+credentials for WebRTC clients, using the
+[coturn "REST API for Access to TURN Services"](https://github.com/coturn/coturn/blob/master/turndb/schema.sql)
+time-limited credentials pattern. Clients call `GET /turn/credentials` with a
+bearer token, and the response is ready to be plugged into an
+`RTCPeerConnection`'s `iceServers` list.
+
+### Environment variables
+
+| Variable               | Required                   | Default                       | Description                                                            |
+| ---------------------- | -------------------------- | ----------------------------- | ---------------------------------------------------------------------- |
+| `TURN_URL`             | yes                        | —                             | Public TURN URL, e.g. `turn:turn.example.com:3478`.                    |
+| `TURN_SHARED_SECRET`   | yes (production)           | `dev-turn-secret` in dev      | Shared secret configured in `coturn` (`static-auth-secret`).           |
+| `TURN_TTL`             | no                         | `3600`                        | Lifetime of each credential, in seconds.                               |
+| `TURN_REALM`           | no                         | `koom.local`                  | Realm reported by coturn (informational, embedded in URLs).            |
+| `TURN_STUN_URLS`       | no                         | `stun:stun.l.google.com:19302` | Comma-separated list of STUN URLs to prepend to `iceServers`.        |
+| `JWT_SECRET`           | yes (production)           | `dev-jwt-secret` in dev       | HS256 secret used by the JWT strategy.                                 |
+| `JWT_AUDIENCE`         | no                         | unset                         | Optional `aud` claim enforced by the strategy.                         |
+| `JWT_ISSUER`           | no                         | unset                         | Optional `iss` claim enforced by the strategy.                         |
+
+The default Google STUN server is fine for development but should be replaced
+with your own STUN/TURN infrastructure in production.
+
+### Algorithm
+
+For each request the server computes:
+
+```
+expiry    = floor(now / 1000) + TURN_TTL
+username  = "{expiry}:{userId}"          # coturn expects this exact format
+password  = base64( HMAC_SHA1(TURN_SHARED_SECRET, username) )
+```
+
+The credential is therefore short-lived: coturn accepts it only while
+`expiry` is in the future.
+
+### Endpoint
+
+`GET /turn/credentials` (Authorization: `Bearer <jwt>`)
+
+```json
+{
+  "iceServers": [
+    { "urls": "stun:stun.l.google.com:19302" },
+    {
+      "urls": [
+        "turn:turn.example.com:3478?transport=udp",
+        "turn:turn.example.com:3478?transport=tcp"
+      ],
+      "username": "1717862400:user-uuid",
+      "credential": "FObG/ju1yAfzdb7VSDcVGCJQIcA=",
+      "credentialType": "password"
+    }
+  ],
+  "expiresAt": "2024-06-08T12:00:00.000Z"
+}
+```
+
+### Example
+
+```bash
+curl -sS http://localhost:8080/turn/credentials \
+  -H "Authorization: Bearer $JWT" | jq
+```
+
+`TurnService` is exported from `TurnModule` so the future SFU / media layer
+can mint the same credentials internally without going through HTTP.
+
 ## Resources
 
 Check out a few resources that may come in handy when working with NestJS:

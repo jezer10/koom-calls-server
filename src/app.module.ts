@@ -11,6 +11,7 @@ import { PresenceModule } from './presence/presence.module';
 import { MediaProviderModule } from './media-provider/media-provider.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ObservabilityModule } from './observability/observability.module';
+import { TurnModule } from './turn/turn.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import {
@@ -32,6 +33,7 @@ export { SocketIoRedisAdapter };
     MediaProviderModule,
     NotificationsModule,
     ObservabilityModule,
+    TurnModule,
   ],
   controllers: [AppController],
   providers: [
