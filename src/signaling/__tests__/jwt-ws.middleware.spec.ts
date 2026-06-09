@@ -56,7 +56,7 @@ describe('JwtWsMiddleware', () => {
 
     it('falls back to "dev-secret-change-me" when not set', () => {
       delete process.env.JWT_SECRET;
-      expect(defaultJwtSecret()).toBe('dev-secret-change-me');
+      expect(defaultJwtSecret()).toBe('dev-jwt-secret');
     });
   });
 

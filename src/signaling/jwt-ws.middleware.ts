@@ -129,7 +129,7 @@ export class JwtWsMiddleware {
 }
 
 export function defaultJwtSecret(): string {
-  return process.env.JWT_SECRET ?? 'dev-secret-change-me';
+  return process.env.JWT_SECRET ?? 'dev-jwt-secret';
 }
 
 export function createJwtWsMiddleware(

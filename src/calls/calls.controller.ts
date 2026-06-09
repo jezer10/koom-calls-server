@@ -6,7 +6,7 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
-  HttpStatus,
+  Inject,
   NotFoundException,
   Param,
   Post,
@@ -14,259 +14,205 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import {
-  CallsService,
-  CallForbiddenError,
-  CallNotFoundError,
-} from './calls.service';
-import {
-  InvalidCallTransitionError,
-  type CallState,
-} from './domain/call-state.machine';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { AuthenticatedUser } from '../auth/authenticated-user';
+import { TURN_SERVICE } from '../turn/turn.types';
+import type { TurnService } from '../turn/turn.types';
+import { SFU_SERVICE } from '../sfu/sfu.types';
+import type { SfuService } from '../sfu/sfu.types';
+import {
+  CallConflictError,
+  CallForbiddenError,
+  CallInvalidStateError,
+  CallNotFoundError,
+  CallEventsStore,
+  CallsService,
+} from './calls.service';
+import { parseCreateCallDto, parseInviteCallDto } from './dto';
 
-interface AuthenticatedRequest extends Request {
-  user: {
-    userId: string;
-    email?: string;
-    [k: string]: unknown;
-  };
+interface AuthedRequest extends Request {
+  user?: AuthenticatedUser;
 }
 
-interface CreateCallDto {
-  type: 'audio' | 'video';
-}
-
-function userIdFrom(req: AuthenticatedRequest): string {
-  const id = req.user?.userId;
-  if (typeof id !== 'string' || id === '') {
-    throw new BadRequestException('authenticated user is required');
+function userIdOrThrow(req: AuthedRequest): string {
+  if (!req.user) {
+    throw new ForbiddenException('Authenticated user required');
   }
-  return id;
+  return req.user.userId;
 }
 
 @Controller('calls')
 @UseGuards(JwtAuthGuard)
 export class CallsController {
-  constructor(private readonly calls: CallsService) {}
+  constructor(
+    private readonly calls: CallsService,
+    private readonly events: CallEventsStore,
+    @Inject(TURN_SERVICE) private readonly turn: TurnService,
+    @Inject(SFU_SERVICE) private readonly sfu: SfuService,
+  ) {}
 
   @Post()
-  async create(@Req() req: AuthenticatedRequest, @Body() body: CreateCallDto) {
-    const userId = userIdFrom(req);
-    if (body?.type !== 'audio' && body?.type !== 'video') {
-      throw new BadRequestException('type must be "audio" or "video"');
+  @HttpCode(201)
+  create(@Body() body: unknown, @Req() req: AuthedRequest) {
+    try {
+      const dto = parseCreateCallDto(body);
+      const call = this.calls.createCall({
+        creatorId: userIdOrThrow(req),
+        roomId: dto.roomId,
+        invitees: dto.invitees,
+      });
+      return this.toResponse(call);
+    } catch (err) {
+      throw this.translateError(err);
     }
-    const call = await this.calls.createCall({
-      type: body.type,
-      createdBy: userId,
-    });
-    return {
-      id: call.id,
-      type: call.type,
-      mode: call.mode,
-      status: call.status,
-      createdBy: call.createdBy,
-      startedAt: call.startedAt,
-      endedAt: call.endedAt,
-    };
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string) {
+  get(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = await this.calls.findById(id);
-      return call;
+      const call = this.calls.getCall(id);
+      const userId = userIdOrThrow(req);
+      if (!this.calls.isParticipant(call, userId)) {
+        throw new CallForbiddenError('Not a participant of this call');
+      }
+      return this.toResponse(call);
     } catch (err) {
-      throw mapNotFound(err);
+      throw this.translateError(err);
     }
   }
 
   @Post(':id/invite')
-  @HttpCode(HttpStatus.OK)
-  async invite(
-    @Req() req: AuthenticatedRequest,
+  @HttpCode(200)
+  invite(
     @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
+    @Body() body: unknown,
+    @Req() req: AuthedRequest,
+  ) {
     try {
-      const call = await this.calls.invite(id, {
-        userId,
-        hostUserId: userId,
-      });
-      return { status: call.status };
+      const dto = parseInviteCallDto(body);
+      const call = this.calls.invite(id, userIdOrThrow(req), dto.inviteeId);
+      return this.toResponse(call);
     } catch (err) {
-      throw mapError(err);
+      throw this.translateError(err);
     }
   }
 
   @Post(':id/accept')
-  @HttpCode(HttpStatus.OK)
-  async accept(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
+  @HttpCode(200)
+  accept(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = await this.calls.accept(id, { userId });
-      return { status: call.status };
+      const call = this.calls.accept(id, userIdOrThrow(req));
+      return this.toResponse(call);
     } catch (err) {
-      throw mapError(err);
+      throw this.translateError(err);
     }
   }
 
-  @Post(':id/reject')
-  @HttpCode(HttpStatus.OK)
-  async reject(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
+  @Post(':id/join')
+  @HttpCode(200)
+  join(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = await this.calls.reject(id, { userId });
-      return { status: call.status };
+      const call = this.calls.join(id, userIdOrThrow(req));
+      return this.toResponse(call);
     } catch (err) {
-      throw mapError(err);
-    }
-  }
-
-  @Post(':id/cancel')
-  @HttpCode(HttpStatus.OK)
-  async cancel(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
-    try {
-      const call = await this.calls.cancel(id, {
-        userId,
-        hostUserId: userId,
-      });
-      return { status: call.status };
-    } catch (err) {
-      throw mapError(err);
-    }
-  }
-
-  @Post(':id/connect')
-  @HttpCode(HttpStatus.OK)
-  async connect(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
-    try {
-      const call = await this.calls.connect(id, { userId });
-      return { status: call.status };
-    } catch (err) {
-      throw mapError(err);
-    }
-  }
-
-  @Post(':id/active')
-  @HttpCode(HttpStatus.OK)
-  async activate(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
-    try {
-      const call = await this.calls.activate(id, {
-        userId,
-        participants: 2,
-      });
-      return { status: call.status };
-    } catch (err) {
-      throw mapError(err);
-    }
-  }
-
-  @Post(':id/reconnect')
-  @HttpCode(HttpStatus.OK)
-  async reconnect(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
-    try {
-      const call = await this.calls.reconnect(id, { userId });
-      return { status: call.status };
-    } catch (err) {
-      throw mapError(err);
-    }
-  }
-
-  @Post(':id/reconnected')
-  @HttpCode(HttpStatus.OK)
-  async reconnected(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
-    try {
-      const call = await this.calls.reconnected(id, { userId });
-      return { status: call.status };
-    } catch (err) {
-      throw mapError(err);
+      throw this.translateError(err);
     }
   }
 
   @Post(':id/end')
-  @HttpCode(HttpStatus.OK)
-  async end(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<{ status: CallState }> {
-    const userId = userIdFrom(req);
+  @HttpCode(200)
+  end(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = await this.calls.end(id, {
-        userId,
-        hostUserId: userId,
-      });
-      return { status: call.status };
+      const call = this.calls.end(id, userIdOrThrow(req));
+      return this.toResponse(call);
     } catch (err) {
-      throw mapError(err);
+      throw this.translateError(err);
+    }
+  }
+
+  @Get(':id/turn-credentials')
+  async turnCredentials(@Param('id') id: string, @Req() req: AuthedRequest) {
+    try {
+      const userId = userIdOrThrow(req);
+      const call = this.calls.getCall(id);
+      if (!this.calls.isParticipant(call, userId)) {
+        throw new CallForbiddenError('Not a participant of this call');
+      }
+      if (call.status === 'ended') {
+        throw new CallInvalidStateError('Call has ended');
+      }
+      const creds = await this.turn.generateCredentials({
+        userId,
+        callId: id,
+      });
+      return creds;
+    } catch (err) {
+      throw this.translateError(err);
+    }
+  }
+
+  @Post(':id/sfu-token')
+  @HttpCode(200)
+  async sfuToken(@Param('id') id: string, @Req() req: AuthedRequest) {
+    try {
+      const userId = userIdOrThrow(req);
+      const call = this.calls.getCall(id);
+      if (!this.calls.isParticipant(call, userId)) {
+        throw new CallForbiddenError('Not a participant of this call');
+      }
+      if (call.status === 'ended') {
+        throw new CallInvalidStateError('Call has ended');
+      }
+      return await this.sfu.issueToken({ callId: id, userId });
+    } catch (err) {
+      throw this.translateError(err);
     }
   }
 
   @Get(':id/events')
-  async listEvents(@Param('id') id: string) {
+  eventsFor(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      await this.calls.findById(id);
+      const call = this.calls.getCall(id);
+      const userId = userIdOrThrow(req);
+      if (!this.calls.isParticipant(call, userId)) {
+        throw new CallForbiddenError('Not a participant of this call');
+      }
+      return { events: this.events.forCall(id) };
     } catch (err) {
-      throw mapNotFound(err);
+      throw this.translateError(err);
     }
-    return this.calls.listEvents(id);
   }
-}
 
-@Controller('me')
-@UseGuards(JwtAuthGuard)
-export class MeCallsController {
-  constructor(private readonly calls: CallsService) {}
+  private toResponse(call: ReturnType<CallsService['getCall']>) {
+    return {
+      id: call.id,
+      roomId: call.roomId,
+      status: call.status,
+      creatorId: call.creatorId,
+      participants: call.participants,
+      createdAt: call.createdAt,
+      startedAt: call.startedAt,
+      endedAt: call.endedAt,
+      endedBy: call.endedBy,
+    };
+  }
 
-  @Get('calls/active')
-  async active(@Req() req: AuthenticatedRequest) {
-    const userId = userIdFrom(req);
-    return this.calls.findActiveForUser(userId);
+  private translateError(err: unknown): Error {
+    if (err instanceof CallNotFoundError) {
+      return new NotFoundException(err.message);
+    }
+    if (err instanceof CallForbiddenError) {
+      return new ForbiddenException(err.message);
+    }
+    if (err instanceof CallConflictError) {
+      return new ConflictException(err.message);
+    }
+    if (err instanceof CallInvalidStateError) {
+      return new ConflictException(err.message);
+    }
+    if (err instanceof Error) {
+      return new BadRequestException(err.message);
+    }
+    return new BadRequestException('Unknown error');
   }
-}
-
-function mapNotFound(err: unknown): NotFoundException {
-  if (err instanceof CallNotFoundError) {
-    return new NotFoundException(err.message);
-  }
-  throw err;
-}
-
-function mapError(err: unknown): Error {
-  if (err instanceof CallNotFoundError) {
-    return new NotFoundException(err.message);
-  }
-  if (err instanceof CallForbiddenError) {
-    return new ForbiddenException(err.message);
-  }
-  if (err instanceof InvalidCallTransitionError) {
-    return new ConflictException(err.message);
-  }
-  throw err;
 }

@@ -1,20 +1,15 @@
 import { Module } from '@nestjs/common';
-import { PassportModule } from '@nestjs/passport';
-import { CoturnTurnService, TURN_CONFIG } from './turn.service';
-import { JwtStrategy } from './jwt.strategy';
-import { TurnController } from './turn.controller';
+import { StaticTurnService } from './turn.service';
+import { TURN_SERVICE } from './turn.types';
 
 @Module({
-  imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
-  controllers: [TurnController],
   providers: [
+    StaticTurnService,
     {
-      provide: TURN_CONFIG,
-      useFactory: () => CoturnTurnService.fromEnv(),
+      provide: TURN_SERVICE,
+      useExisting: StaticTurnService,
     },
-    CoturnTurnService,
-    JwtStrategy,
   ],
-  exports: [CoturnTurnService],
+  exports: [TURN_SERVICE, StaticTurnService],
 })
 export class TurnModule {}

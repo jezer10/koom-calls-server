@@ -1,191 +1,217 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import {
-  CALL_STATE_MACHINE,
-  type CallEvent,
-  type CallStateMachine,
-  type TransitionContext,
-} from './domain/call-state.machine';
-import {
-  CALLS_REPOSITORY,
-  CALL_EVENTS_REPOSITORY,
-  type CallEventRecord,
-  type CallLike,
-  type CallMode,
-  type CallsRepository,
-  type CallEventsRepository,
-  type CallType,
-} from './calls.repository.interface';
+  Call,
+  CallEvent,
+  CallEventType,
+  CallParticipant,
+  CreateCallInput,
+} from './call.types';
 
-export interface CreateCallInput {
-  type: CallType;
-  createdBy: string;
-  mode?: CallMode;
+@Injectable()
+export class CallEventsStore {
+  private readonly events: CallEvent[] = [];
+  private nextId = 1;
+
+  record(
+    callId: string,
+    type: CallEventType,
+    userId: string,
+    payload?: Record<string, unknown>,
+  ): CallEvent {
+    const event: CallEvent = {
+      id: this.nextId++,
+      callId,
+      type,
+      userId,
+      payload,
+      createdAt: new Date().toISOString(),
+    };
+    this.events.push(event);
+    return event;
+  }
+
+  forCall(callId: string): CallEvent[] {
+    return this.events.filter((e) => e.callId === callId);
+  }
+
+  all(): CallEvent[] {
+    return [...this.events];
+  }
+
+  clear(): void {
+    this.events.length = 0;
+    this.nextId = 1;
+  }
 }
 
-export interface HostActor {
-  userId: string;
-  hostUserId: string;
-}
-
-export interface UserActor {
-  userId: string;
-}
-
-export interface ActivateContext {
-  userId: string;
-  participants: number;
+export class CallNotFoundError extends Error {
+  constructor(callId: string) {
+    super(`Call ${callId} not found`);
+    this.name = 'CallNotFoundError';
+  }
 }
 
 export class CallForbiddenError extends Error {
-  constructor(message = 'forbidden') {
+  constructor(message: string) {
     super(message);
     this.name = 'CallForbiddenError';
   }
 }
 
-export class CallNotFoundError extends Error {
-  constructor(public readonly callId: string) {
-    super(`Call not found: ${callId}`);
-    this.name = 'CallNotFoundError';
+export class CallConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CallConflictError';
+  }
+}
+
+export class CallInvalidStateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CallInvalidStateError';
   }
 }
 
 @Injectable()
 export class CallsService {
-  private readonly logger = new Logger(CallsService.name);
+  private readonly calls = new Map<string, Call>();
 
-  constructor(
-    @Inject(CALL_STATE_MACHINE) private readonly machine: CallStateMachine,
-    @Inject(CALLS_REPOSITORY) private readonly calls: CallsRepository,
-    @Inject(CALL_EVENTS_REPOSITORY)
-    private readonly events: CallEventsRepository,
-  ) {}
+  constructor(private readonly events: CallEventsStore) {}
 
-  async createCall(input: CreateCallInput): Promise<CallLike> {
-    const call = await this.calls.save({
-      type: input.type,
-      mode: input.mode ?? 'sfu',
-      status: 'created',
-      createdBy: input.createdBy,
-    });
-    await this.events.record({
-      callId: call.id,
-      userId: input.createdBy,
-      eventType: 'created',
-      payload: { type: call.type, mode: call.mode },
-    });
-    return call;
-  }
+  createCall(input: CreateCallInput): Call {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const roomId = input.roomId ?? `call-${id}`;
+    const creator: CallParticipant = {
+      userId: input.creatorId,
+      role: 'creator',
+      status: 'joined',
+      invitedAt: now,
+      joinedAt: now,
+    };
+    const call: Call = {
+      id,
+      roomId,
+      status: 'pending',
+      creatorId: input.creatorId,
+      participants: [creator],
+      createdAt: now,
+    };
+    this.calls.set(id, call);
+    this.events.record(id, 'created', input.creatorId, { roomId });
 
-  async invite(callId: string, actor: HostActor): Promise<CallLike> {
-    return this.runTransition(callId, 'invite', actor, {
-      requireHost: true,
-    });
-  }
-
-  async accept(callId: string, actor: UserActor): Promise<CallLike> {
-    return this.runTransition(callId, 'accept', actor);
-  }
-
-  async reject(callId: string, actor: UserActor): Promise<CallLike> {
-    return this.runTransition(callId, 'reject', actor);
-  }
-
-  async cancel(callId: string, actor: HostActor): Promise<CallLike> {
-    return this.runTransition(callId, 'cancel', actor, {
-      requireHost: true,
-    });
-  }
-
-  async connect(callId: string, actor: UserActor): Promise<CallLike> {
-    return this.runTransition(callId, 'connect', actor);
-  }
-
-  async activate(callId: string, ctx: ActivateContext): Promise<CallLike> {
-    return this.runTransition(
-      callId,
-      'activate',
-      { userId: ctx.userId },
-      { participants: ctx.participants, timestamp: { startedAt: new Date() } },
-    );
-  }
-
-  async reconnect(callId: string, actor: UserActor): Promise<CallLike> {
-    return this.runTransition(callId, 'reconnect', actor);
-  }
-
-  async reconnected(callId: string, actor: UserActor): Promise<CallLike> {
-    return this.runTransition(callId, 'reconnected', actor);
-  }
-
-  async end(callId: string, actor: HostActor): Promise<CallLike> {
-    return this.runTransition(callId, 'end', actor, {
-      requireHost: true,
-      timestamp: { endedAt: new Date() },
-    });
-  }
-
-  async findById(callId: string): Promise<CallLike> {
-    const call = await this.calls.findById(callId);
-    if (!call) {
-      throw new CallNotFoundError(callId);
+    for (const invitee of input.invitees ?? []) {
+      if (invitee === input.creatorId) continue;
+      this.inviteInternal(call, invitee);
     }
     return call;
   }
 
-  findActiveForUser(userId: string): Promise<CallLike[]> {
-    return this.calls.findActiveForUser(userId);
+  getCall(callId: string): Call {
+    const call = this.calls.get(callId);
+    if (!call) throw new CallNotFoundError(callId);
+    return call;
   }
 
-  listEvents(callId: string, limit?: number): Promise<CallEventRecord[]> {
-    return this.events.listForCall(callId, limit);
-  }
-
-  private async runTransition(
-    callId: string,
-    event: CallEvent,
-    actor: { userId: string },
-    options: {
-      requireHost?: boolean;
-      participants?: number;
-      timestamp?: { startedAt?: Date; endedAt?: Date };
-    } = {},
-  ): Promise<CallLike> {
-    const current = await this.calls.findById(callId);
-    if (!current) {
-      throw new CallNotFoundError(callId);
+  invite(callId: string, inviterId: string, inviteeId: string): Call {
+    if (inviterId === inviteeId) {
+      throw new CallConflictError('Cannot invite yourself');
     }
+    const call = this.getCall(callId);
+    if (call.status === 'ended') {
+      throw new CallInvalidStateError('Cannot invite to an ended call');
+    }
+    if (!this.isParticipant(call, inviterId)) {
+      throw new CallForbiddenError('Only participants can invite');
+    }
+    this.inviteInternal(call, inviteeId);
+    return call;
+  }
 
-    if (options.requireHost && actor.userId !== current.createdBy) {
+  private inviteInternal(call: Call, inviteeId: string): void {
+    const existing = call.participants.find((p) => p.userId === inviteeId);
+    if (existing) return;
+    const now = new Date().toISOString();
+    call.participants.push({
+      userId: inviteeId,
+      role: 'invitee',
+      status: 'invited',
+      invitedAt: now,
+    });
+    this.events.record(call.id, 'invited', inviteeId, { by: call.creatorId });
+  }
+
+  accept(callId: string, userId: string): Call {
+    const call = this.getCall(callId);
+    if (call.status === 'ended') {
+      throw new CallInvalidStateError('Cannot accept an ended call');
+    }
+    const participant = this.requireParticipant(call, userId);
+    if (participant.status === 'joined') return call;
+    participant.status = 'joined';
+    participant.joinedAt = new Date().toISOString();
+    if (call.status === 'pending') {
+      call.status = 'active';
+      call.startedAt = new Date().toISOString();
+    }
+    this.events.record(callId, 'accepted', userId);
+    this.events.record(callId, 'joined', userId);
+    return call;
+  }
+
+  join(callId: string, userId: string): Call {
+    const call = this.getCall(callId);
+    if (call.status === 'ended') {
+      throw new CallInvalidStateError('Call has ended');
+    }
+    this.requireParticipant(call, userId);
+    return call;
+  }
+
+  leave(callId: string, userId: string): Call {
+    const call = this.getCall(callId);
+    const participant = this.requireParticipant(call, userId);
+    if (participant.status === 'left') return call;
+    participant.status = 'left';
+    participant.leftAt = new Date().toISOString();
+    this.events.record(callId, 'left', userId);
+    return call;
+  }
+
+  end(callId: string, userId: string): Call {
+    const call = this.getCall(callId);
+    if (!this.isParticipant(call, userId)) {
+      throw new CallForbiddenError('Only participants can end the call');
+    }
+    if (call.status === 'ended') return call;
+    call.status = 'ended';
+    call.endedAt = new Date().toISOString();
+    call.endedBy = userId;
+    this.events.record(callId, 'ended', userId);
+    return call;
+  }
+
+  isParticipant(call: Call, userId: string): boolean {
+    return call.participants.some((p) => p.userId === userId);
+  }
+
+  isActive(call: Call): boolean {
+    return call.status !== 'ended';
+  }
+
+  reset(): void {
+    this.calls.clear();
+    this.events.clear();
+  }
+
+  private requireParticipant(call: Call, userId: string): CallParticipant {
+    const participant = call.participants.find((p) => p.userId === userId);
+    if (!participant) {
       throw new CallForbiddenError(
-        `user ${actor.userId} is not the host of call ${callId}`,
+        `User ${userId} is not a participant of call ${call.id}`,
       );
     }
-
-    const ctx: TransitionContext = {
-      actor: { userId: actor.userId, hostUserId: current.createdBy },
-      participants: options.participants,
-    };
-
-    const next = this.machine.apply(current.status, event, ctx);
-
-    const updated = await this.calls.updateStatus(
-      callId,
-      next,
-      options.timestamp,
-    );
-
-    await this.events.record({
-      callId,
-      userId: actor.userId,
-      eventType: 'state_change',
-      payload: { from: current.status, to: next, event },
-    });
-
-    this.logger.log(
-      `call ${callId}: ${current.status} → ${next} (event=${event}, actor=${actor.userId})`,
-    );
-
-    return updated;
+    return participant;
   }
 }

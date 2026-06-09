@@ -110,9 +110,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       sharedSecret: turnSharedSecret,
       ttlSeconds: parseInt10(env.TURN_TTL, parsed.TURN_TTL),
       realm: env.TURN_REALM ?? 'koom.local',
-      stunUrls: parseList(env.TURN_STUN_URLS, [
-        'stun:stun.l.google.com:19302',
-      ]),
+      stunUrls: parseList(env.TURN_STUN_URLS, ['stun:stun.l.google.com:19302']),
     },
   };
 }

@@ -1,67 +1,54 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
-import { createHmac } from 'node:crypto';
+import { Injectable, Logger } from '@nestjs/common';
+import * as crypto from 'node:crypto';
+import {
+  TurnCredentials,
+  TurnCredentialsOptions,
+  TurnService,
+} from './turn.types';
 import { loadConfig } from '../config/app.config';
-import type { IceServer, TurnCredentials } from './turn.types';
-
-export interface TurnService {
-  generateCredentials(userId: string, now?: Date): TurnCredentials;
-}
-
-export const TURN_CONFIG = 'TURN_CONFIG';
-export const TURN_CLOCK = 'TURN_CLOCK';
-
-export type TurnClock = () => Date;
-
-export interface TurnConfig {
-  url: string;
-  sharedSecret: string;
-  ttlSeconds: number;
-  realm: string;
-  stunUrls: string[];
-}
-
-const defaultClock: TurnClock = () => new Date();
 
 @Injectable()
-export class CoturnTurnService implements TurnService {
-  constructor(
-    @Inject(TURN_CONFIG) private readonly config: TurnConfig,
-    @Optional()
-    @Inject(TURN_CLOCK)
-    private readonly clock: TurnClock = defaultClock,
-  ) {}
+export class StaticTurnService implements TurnService {
+  private readonly logger = new Logger(StaticTurnService.name);
+  private readonly ttlSeconds = 3600;
+  private readonly urls: string[];
 
-  static fromEnv(): TurnConfig {
-    return loadConfig().turn;
+  constructor() {
+    const raw = process.env.TURN_URLS;
+    if (raw && raw.length > 0) {
+      this.urls = raw
+        .split(',')
+        .map((u) => u.trim())
+        .filter(Boolean);
+    } else {
+      this.urls = [
+        'turn:turn.koom.example.com:3478?transport=udp',
+        'turn:turn.koom.example.com:3478?transport=tcp',
+      ];
+    }
   }
 
-  generateCredentials(userId: string, now?: Date): TurnCredentials {
-    const effectiveNow = now ?? this.clock();
-    const expiryTimestamp =
-      Math.floor(effectiveNow.getTime() / 1000) + this.config.ttlSeconds;
-    const username = `${expiryTimestamp}:${userId}`;
-    const password = signTurnPassword(this.config.sharedSecret, username);
-
-    const iceServers: IceServer[] = [
-      ...this.config.stunUrls.map((url) => ({ urls: url })),
-      {
-        urls: [
-          `${this.config.url}?transport=udp`,
-          `${this.config.url}?transport=tcp`,
-        ],
-        username,
-        credential: password,
-        credentialType: 'password' as const,
-      },
-    ];
-
+  generateCredentials(opts: TurnCredentialsOptions): TurnCredentials {
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const expiresAt = issuedAt + this.ttlSeconds;
+    const credential = this.hmac(`${opts.userId}:${opts.callId}`, expiresAt);
+    this.logger.debug(
+      `Issued TURN creds for user=${opts.userId} call=${opts.callId} ttl=${this.ttlSeconds}s`,
+    );
     return {
-      iceServers,
-      expiresAt: new Date(expiryTimestamp * 1000).toISOString(),
+      urls: [...this.urls],
+      username: `${opts.userId}:${expiresAt}`,
+      credential,
+      ttl: this.ttlSeconds,
+      expiresAt: new Date(expiresAt * 1000).toISOString(),
     };
   }
-}
 
-export function signTurnPassword(secret: string, username: string): string {
-  return createHmac('sha1', secret).update(username).digest('base64');
+  private hmac(input: string, expiresAt: number): string {
+    const config = loadConfig();
+    return crypto
+      .createHmac('sha1', config.jwt.secret)
+      .update(`${input}:${expiresAt}`)
+      .digest('base64');
+  }
 }

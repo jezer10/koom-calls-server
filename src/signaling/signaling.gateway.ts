@@ -77,7 +77,7 @@ export class SignalingGateway
 
   afterInit(server: Io.Namespace): void {
     const middleware = new JwtWsMiddleware({
-      secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
+      secret: process.env.JWT_SECRET ?? config.jwt.secret ?? 'dev-jwt-secret',
     });
     server.use((socket: Io.Socket, next: (err?: Error) => void) => {
       middleware.use(socket, (err) => {

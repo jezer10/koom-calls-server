@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { loadConfig } from './app.config';
 
 describe('loadConfig', () => {
@@ -32,6 +33,7 @@ describe('loadConfig', () => {
   it('returns sensible defaults when no env vars are set', () => {
     process.env.TURN_URL = 'turn:turn.example.com:3478';
     const cfg = loadConfig();
+
     expect(cfg.httpPort).toBe(8080);
     expect(cfg.peer).toMatchObject({
       enabled: true,
