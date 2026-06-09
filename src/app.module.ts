@@ -27,7 +27,6 @@ export { SocketIoRedisAdapter };
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      ignoreEnvFile: true,
       validate: (env) => parseEnv(env, { onWarning: console.warn }),
     }),
     AuthModule,
