@@ -62,34 +62,42 @@ descriptive error.
 
 ## Project setup
 
+This repo uses **pnpm@10.34.1** (pinned via `packageManager`).
+Use [Corepack](https://nodejs.org/api/corepack.html) to install the
+right version automatically:
+
 ```bash
-$ npm install
+$ corepack enable
+$ pnpm install
 ```
 
 ## Compile and run the project
 
 ```bash
 # development
-$ npm run start
+$ pnpm run start
 
 # watch mode
-$ npm run start:dev
+$ pnpm run start:dev
 
 # production mode
-$ npm run start:prod
+$ pnpm run start:prod
 ```
 
 ## Run tests
 
 ```bash
 # unit tests
-$ npm run test
+$ pnpm test
 
 # e2e tests
-$ npm run test:e2e
+$ pnpm run test:e2e
 
 # test coverage
-$ npm run test:cov
+$ pnpm run test:cov
+
+# end-to-end smoke (requires the docker stack + JWT_SECRET in .env)
+$ pnpm run smoke
 ```
 
 ## Deployment

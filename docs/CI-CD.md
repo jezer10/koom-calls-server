@@ -205,7 +205,7 @@ curl -fsS -H "Authorization: Bearer $TOKEN" \
 |---|---|---|
 | `JWT_SECRET is required in production` | Falta o vacío en `NODE_ENV=production` | Setear con `openssl rand -base64 48` |
 | `TURN_URL is required in production` | Igual | Setear con URL del servidor coturn |
-| `Could not find module 'X'` | `npm ci` falló en la build | Revisar logs de la action, re-disparar |
+| `Could not find module 'X'` | `pnpm install` falló en la build | Revisar logs de la action, re-disparar |
 | Health check falla 30s | La imagen crashea o no escucha | `docker logs koom-calls-server` en VPS |
 | `unauthorized` en socket.io | Secret del middleware WS ≠ del firmador | El middleware usa `process.env.JWT_SECRET`, mismo que el firmador |
 | `permission denied` en `docker login` | `GITHUB_TOKEN` expiró o sin scopes | Re-disparar la action, el token se regenera |

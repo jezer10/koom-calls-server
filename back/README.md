@@ -22,7 +22,7 @@ The adapter is enabled by setting a single environment variable:
 
 ```bash
 export REDIS_URL=redis://localhost:6379
-npm run start:prod
+pnpm run start:prod
 ```
 
 When `REDIS_URL` is **not** set, the adapter is a no-op: the server is
@@ -49,10 +49,10 @@ keeps local development and single-instance deployments dependency-free.
 
    ```bash
    # terminal 1
-   PORT=8080 REDIS_URL=redis://localhost:6379 npm run start:prod
+   PORT=8080 REDIS_URL=redis://localhost:6379 pnpm run start:prod
 
    # terminal 2
-   PORT=8081 REDIS_URL=redis://localhost:6379 npm run start:prod
+   PORT=8081 REDIS_URL=redis://localhost:6379 pnpm run start:prod
    ```
 
 3. Open a browser tab to `http://localhost:8080` and another to

@@ -30,8 +30,8 @@ docker compose up --build
 
 # 4. In a second terminal, start the SPA dev server
 #    (from the front/ repo):
-#      npm install
-#      npm run dev
+#      pnpm install
+#      pnpm run dev
 #    The SPA should target http://localhost:8080 for API requests.
 ```
 
@@ -129,7 +129,7 @@ The SPA dev server (in the `front/` repo) is expected to:
   direct/host/STUN.
 
 Run it from the `front/` directory with your usual dev script (for example
-`npm run dev`).
+`pnpm run dev`).
 
 ## 8. Limitations / dev-only assumptions
 
