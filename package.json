@@ -17,7 +17,11 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "typeorm": "typeorm-ts-node-commonjs",
+    "migration:run": "typeorm-ts-node-commonjs -d src/persistence/data-source.ts migration:run",
+    "migration:revert": "typeorm-ts-node-commonjs -d src/persistence/data-source.ts migration:revert",
+    "seed:dev": "ts-node -r tsconfig-paths/register src/persistence/seeds/run-dev.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -26,13 +30,16 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.1.24",
+    "@nestjs/typeorm": "^11.0.1",
     "@nestjs/websockets": "^11.1.24",
+    "better-sqlite3": "^12.10.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "peer": "^1.0.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
+    "typeorm": "^1.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -41,6 +48,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",

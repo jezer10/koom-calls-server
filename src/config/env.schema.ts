@@ -5,7 +5,7 @@ export const NODE_ENV_VALUES = ['development', 'test', 'production'] as const;
 export type NodeEnv = (typeof NODE_ENV_VALUES)[number];
 
 const booleanFromString = (fallback: boolean) =>
-  z.preprocess((value) => {
+  z.preprocess((value: unknown) => {
     if (value === undefined || value === null || value === '') return undefined;
     if (typeof value === 'boolean') return value;
     if (typeof value === 'number') return value !== 0;
@@ -22,7 +22,7 @@ const booleanFromString = (fallback: boolean) =>
   }, z.boolean().default(fallback));
 
 const numberFromString = (fallback: number) =>
-  z.preprocess((value) => {
+  z.preprocess((value: unknown) => {
     if (value === undefined || value === null || value === '') return undefined;
     if (typeof value === 'number') {
       return Number.isFinite(value) ? Math.trunc(value) : undefined;
@@ -43,7 +43,7 @@ const detectNodeEnv = (raw: string | undefined): NodeEnv => {
   return 'development';
 };
 
-const nodeEnvField = z.preprocess((value) => {
+const nodeEnvField = z.preprocess((value: unknown) => {
   if (value === undefined || value === null || value === '') return undefined;
   if (
     typeof value === 'string' &&
@@ -73,7 +73,7 @@ export function buildEnvSchema(
   const jwtSecretField = z
     .string()
     .optional()
-    .transform((value, ctx) => {
+    .transform((value: string | undefined, ctx: z.RefinementCtx) => {
       if (value !== undefined && value !== null && value !== '') {
         return value;
       }
@@ -160,7 +160,7 @@ function formatEnvError(error: z.ZodError): string {
   return [
     'Invalid environment configuration:',
     ...error.issues.map(
-      (issue) =>
+      (issue: z.ZodIssue) =>
         `  - ${issue.path.length > 0 ? issue.path.join('.') : '<root>'}: ${issue.message}`,
     ),
   ].join('\n');
