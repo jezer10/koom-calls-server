@@ -5,14 +5,11 @@ import { AppService } from './app.service';
 
 const stubConfig: Record<string, string | number | boolean> = {
   SIGNALING_NAMESPACE: '/signaling',
-  PEER_PORT: 9000,
-  PEER_KEY: 'peerjs',
-  PEER_PATH: '/',
-  PEER_ALLOW_DISCOVERY: false,
 };
 
 const stubConfigService: Partial<ConfigService> = {
-  get: <T = unknown>(key: string): T | undefined => stubConfig[key] as T | undefined,
+  get: <T = unknown>(key: string): T | undefined =>
+    stubConfig[key] as T | undefined,
   getOrThrow: <T = unknown>(key: string): T => {
     if (key in stubConfig) return stubConfig[key] as T;
     throw new Error(`unexpected key ${key}`);
@@ -58,10 +55,7 @@ describe('AppController', () => {
       expect(info.name).toBe('koom-calls-server');
       expect(typeof info.version).toBe('string');
       expect(typeof info.signaling.namespace).toBe('string');
-      expect(typeof info.peer.enabled).toBe('boolean');
-      expect(typeof info.peer.port).toBe('number');
-      expect(typeof info.peer.path).toBe('string');
-      expect(typeof info.peer.key).toBe('string');
+      expect(info.media.provider).toBe('livekit');
     });
   });
 

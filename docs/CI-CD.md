@@ -92,7 +92,6 @@ openssl rand -base64 32   # → password de Postgres
 | `RATE_LIMIT_IP_BURST` | opcional | 200 | |
 | `RATE_LIMIT_IP_PER_SECOND` | opcional | 200 | |
 | `SIGNALING_NAMESPACE` | opcional | `/signaling` | |
-| `PEER_*` | DEPRECATED | — | legacy PeerJS, se retira en M3; usa `SKIP_PEER=1` para apagarlo |
 
 ## 4. Setup inicial en la VPS (una sola vez)
 

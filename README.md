@@ -58,7 +58,6 @@ descriptive error.
 | `TURN_URL`               | coturn URL for short-lived TURN credentials.              |
 | `TURN_SHARED_SECRET`     | Shared secret to sign TURN credentials.                   |
 | `TURN_TTL`               | TURN credential TTL in seconds (default `3600`).          |
-| `PEER_*`                 | **Deprecated** — PeerJS broker, will be removed in M2–M4. |
 
 
 ## Project setup

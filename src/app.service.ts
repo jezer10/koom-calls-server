@@ -19,11 +19,8 @@ export class AppService {
       signaling: {
         namespace: signalingNamespace,
       },
-      peer: {
-        enabled: this.configService.get<string>('SKIP_PEER') !== '1',
-        port: this.configService.getOrThrow<number>('PEER_PORT'),
-        path: this.configService.getOrThrow<string>('PEER_PATH'),
-        key: this.configService.getOrThrow<string>('PEER_KEY'),
+      media: {
+        provider: 'livekit',
       },
     };
   }

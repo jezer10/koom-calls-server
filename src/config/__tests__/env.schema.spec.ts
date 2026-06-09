@@ -29,11 +29,6 @@ describe('parseEnv', () => {
       'TURN_SHARED_SECRET',
       'TURN_TTL',
       'TURN_TOKEN_TTL_SECONDS',
-      'PEER_ENABLED',
-      'PEER_PORT',
-      'PEER_KEY',
-      'PEER_PATH',
-      'PEER_ALLOW_DISCOVERY',
       'RATE_LIMIT_SOCKET_PER_SECOND',
       'RATE_LIMIT_USER_PER_SECOND',
       'RATE_LIMIT_IP_PER_SECOND',
@@ -72,11 +67,6 @@ describe('parseEnv', () => {
       expect(parsed.TURN_SHARED_SECRET).toBe('');
       expect(parsed.TURN_TTL).toBe(3600);
       expect(parsed.TURN_TOKEN_TTL_SECONDS).toBe(3600);
-      expect(parsed.PEER_ENABLED).toBe(false);
-      expect(parsed.PEER_PORT).toBe(9000);
-      expect(parsed.PEER_KEY).toBe('peerjs');
-      expect(parsed.PEER_PATH).toBe('/');
-      expect(parsed.PEER_ALLOW_DISCOVERY).toBe(false);
       expect(parsed.RATE_LIMIT_SOCKET_PER_SECOND).toBe(20);
       expect(parsed.RATE_LIMIT_USER_PER_SECOND).toBe(10);
       expect(parsed.RATE_LIMIT_IP_PER_SECOND).toBe(30);
@@ -108,30 +98,6 @@ describe('parseEnv', () => {
 
     it('coerces TURN_TTL from string to integer', () => {
       expect(parseEnv({ TURN_TTL: '900' }).TURN_TTL).toBe(900);
-    });
-
-    it('coerces PEER_PORT from string to integer', () => {
-      expect(parseEnv({ PEER_PORT: '7100' }).PEER_PORT).toBe(7100);
-    });
-  });
-
-  describe('boolean coercion', () => {
-    it('parses true variants: 1, true, yes', () => {
-      for (const value of ['1', 'true', 'TRUE', 'yes', 'YES']) {
-        const env = { PEER_ENABLED: value, PEER_ALLOW_DISCOVERY: value };
-        const parsed = parseEnv(env);
-        expect(parsed.PEER_ENABLED).toBe(true);
-        expect(parsed.PEER_ALLOW_DISCOVERY).toBe(true);
-      }
-    });
-
-    it('parses false variants: 0, false, no', () => {
-      for (const value of ['0', 'false', 'FALSE', 'no', 'NO']) {
-        const env = { PEER_ENABLED: value, PEER_ALLOW_DISCOVERY: value };
-        const parsed = parseEnv(env);
-        expect(parsed.PEER_ENABLED).toBe(false);
-        expect(parsed.PEER_ALLOW_DISCOVERY).toBe(false);
-      }
     });
   });
 
@@ -278,14 +244,16 @@ describe('parseEnv', () => {
   describe('newly declared variables (CONFIG-1)', () => {
     it('TURN_URLS defaults to empty string', () => {
       expect(parseEnv({}).TURN_URLS).toBe('');
-      expect(parseEnv({ TURN_URLS: 'turn:a:3478,turn:b:3478' }).TURN_URLS)
-        .toBe('turn:a:3478,turn:b:3478');
+      expect(parseEnv({ TURN_URLS: 'turn:a:3478,turn:b:3478' }).TURN_URLS).toBe(
+        'turn:a:3478,turn:b:3478',
+      );
     });
 
     it('SFU_URL defaults to empty string', () => {
       expect(parseEnv({}).SFU_URL).toBe('');
-      expect(parseEnv({ SFU_URL: 'wss://sfu.example.com/v1/rtc' }).SFU_URL)
-        .toBe('wss://sfu.example.com/v1/rtc');
+      expect(
+        parseEnv({ SFU_URL: 'wss://sfu.example.com/v1/rtc' }).SFU_URL,
+      ).toBe('wss://sfu.example.com/v1/rtc');
     });
 
     it('LOG_LEVEL defaults to debug', () => {
@@ -297,10 +265,12 @@ describe('parseEnv', () => {
     it('JWT_AUDIENCE and JWT_ISSUER are optional and only present when set', () => {
       expect(parseEnv({}).JWT_AUDIENCE).toBeUndefined();
       expect(parseEnv({}).JWT_ISSUER).toBeUndefined();
-      expect(parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_AUDIENCE)
-        .toBe('koom');
-      expect(parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_ISSUER)
-        .toBe('koom-iss');
+      expect(
+        parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_AUDIENCE,
+      ).toBe('koom');
+      expect(
+        parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_ISSUER,
+      ).toBe('koom-iss');
     });
 
     it('rate-limit fields default to the documented values', () => {
@@ -333,10 +303,12 @@ describe('parseEnv', () => {
     it('SFU_TOKEN_TTL_SECONDS and TURN_TOKEN_TTL_SECONDS default to 3600', () => {
       expect(parseEnv({}).SFU_TOKEN_TTL_SECONDS).toBe(3600);
       expect(parseEnv({}).TURN_TOKEN_TTL_SECONDS).toBe(3600);
-      expect(parseEnv({ SFU_TOKEN_TTL_SECONDS: '1800' }).SFU_TOKEN_TTL_SECONDS)
-        .toBe(1800);
-      expect(parseEnv({ TURN_TOKEN_TTL_SECONDS: '7200' }).TURN_TOKEN_TTL_SECONDS)
-        .toBe(7200);
+      expect(
+        parseEnv({ SFU_TOKEN_TTL_SECONDS: '1800' }).SFU_TOKEN_TTL_SECONDS,
+      ).toBe(1800);
+      expect(
+        parseEnv({ TURN_TOKEN_TTL_SECONDS: '7200' }).TURN_TOKEN_TTL_SECONDS,
+      ).toBe(7200);
     });
   });
 });

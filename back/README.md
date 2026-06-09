@@ -63,7 +63,5 @@ keeps local development and single-instance deployments dependency-free.
 
 ### Notes
 
-- The adapter is only active for Socket.IO. PeerJS uses its own broker
-  (see `src/peer/peer-server.ts`) and is not affected.
 - `REDIS_URL` accepts any connection string `ioredis` understands, e.g.
   `rediss://...` for TLS or `redis://user:pass@host:6379/0`.

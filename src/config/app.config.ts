@@ -1,14 +1,7 @@
-import { parseEnv, type ParsedEnv } from './env.schema';
+import type { ParsedEnv } from './env.schema';
 
 export interface AppConfig {
   httpPort: number;
-  peer: {
-    enabled: boolean;
-    port: number;
-    key: string;
-    path: string;
-    allowDiscovery: boolean;
-  };
   signaling: {
     namespace: string;
     corsOrigin: string | string[];
@@ -33,16 +26,6 @@ export interface AppConfig {
   };
 }
 
-let peerWarned = false;
-
-function warnPeerDeprecation(): void {
-  if (peerWarned) return;
-  peerWarned = true;
-  console.warn(
-    '[deprecated] PEER_ENABLED will be removed. Use LiveKit (M3).',
-  );
-}
-
 function parseList(value: string | undefined, fallback: string[]): string[] {
   if (value === undefined || value === '') return fallback;
   return value
@@ -51,18 +34,12 @@ function parseList(value: string | undefined, fallback: string[]): string[] {
     .filter((entry) => entry.length > 0);
 }
 
-export function buildAppConfig(parsed: ParsedEnv, env: NodeJS.ProcessEnv): AppConfig {
-  const peerEnabled = env.SKIP_PEER !== '1';
-  if (peerEnabled) warnPeerDeprecation();
+export function buildAppConfig(
+  parsed: ParsedEnv,
+  env: NodeJS.ProcessEnv,
+): AppConfig {
   return {
     httpPort: parsed.PORT,
-    peer: {
-      enabled: peerEnabled,
-      port: parsed.PEER_PORT,
-      key: parsed.PEER_KEY,
-      path: parsed.PEER_PATH,
-      allowDiscovery: parsed.PEER_ALLOW_DISCOVERY,
-    },
     signaling: {
       namespace: parsed.SIGNALING_NAMESPACE,
       corsOrigin: parsed.CORS_ORIGIN,
@@ -78,9 +55,7 @@ export function buildAppConfig(parsed: ParsedEnv, env: NodeJS.ProcessEnv): AppCo
       sharedSecret: parsed.TURN_SHARED_SECRET,
       ttlSeconds: parsed.TURN_TTL,
       realm: 'koom.local',
-      stunUrls: parseList(env.TURN_STUN_URLS, [
-        'stun:stun.l.google.com:19302',
-      ]),
+      stunUrls: parseList(env.TURN_STUN_URLS, ['stun:stun.l.google.com:19302']),
     },
   };
 }

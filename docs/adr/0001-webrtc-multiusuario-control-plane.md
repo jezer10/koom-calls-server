@@ -1,46 +1,39 @@
-# ADR 0001 — Arquitectura WebRTC multiusuario
+# ADR 0001 — Arquitectura WebRTC multiusuario: control plane NestJS + SFU LiveKit
 
 - **Estado:** Aceptado
-- **Fecha:** 2026-06-08
+- **Fecha:** 2026-06-08 (última revisión: 2026-06-09)
 - **Ticket:** LBR-66 (CALL-001)
 - **Autores:** Plataforma Koom
-- **Relacionado:** LBR-67 (retirada de PeerJS), LBR-68 (TypeORM/SQLite), LBR-69 (máquina de estados y JWT)
+- **Relacionado:** LBR-68 (TypeORM/SQLite), LBR-69 (máquina de estados y JWT)
+
+> Este ADR describe la arquitectura vigente del backend de Koom Calls.
+> Históricamente (M0) el proyecto usó un broker PeerJS embebido como plano
+> de señalización y medios; ese camino fue retirado en M3 y todas las
+> referencias a `peerjs` / `peer-server` / `PEER_*` se han eliminado del
+> código, de la configuración y de los despliegues.
 
 ## Contexto
 
-Koom ofrece un producto de videollamadas y, hasta ahora, el backend NestJS
-incluye un broker PeerJS embebido (`src/peer/peer-server.ts`) que actúa como
-**plan de medios y señalización por descubrimiento de IDs**, mientras que
-`SignalingModule` cubre una capa adicional de señalización Socket.IO por
-namespace (`/signaling`).
+Koom ofrece un producto de videollamadas multiusuario. El reto es servir
+salas de 1–10 participantes en M1, con crecimiento a M2–M4 (presencia,
+notificaciones, observabilidad) sin reescribir la base en cada hito. Las
+arquitecturas candidatas deben cumplir cuatro propiedades no negociables:
 
-Este modelo funcionó para llamadas uno-a-uno en M0, pero muestra fricciones
-claras para el producto objetivo de M1–M4:
+1. **Calidad consistente** por encima de 3–4 participantes (no degradar
+   CPU/ancho de banda del navegador como lo hace una topología mesh P2P).
+2. **Identidad unificada** con el sistema Koom: la sala y los medios deben
+   pasar por un JWT de corta duración emitido por la API, no por un broker
+   público.
+3. **Estado durable y observable**: salas, claims y eventos persisten; el
+   ciclo de vida de la llamada es medible.
+4. **Escalado horizontal** del plano de medios independiente del plano de
+   control.
 
-1. **Topología mesh P2P.** Cada par publica N−1 conexiones salientes; con
-   ≥4 participantes por sala el ancho de banda y la CPU del navegador se
-   degradan linealmente y la calidad cae incluso en redes buenas.
-2. **Descubrimiento de IDs sin autenticación.** El broker PeerJS sólo conoce
-   `peerId`/`token` y no valida al usuario contra el sistema de identidad de
-   Koom. Hoy el `peer.enabled=true` por defecto permite enumeración y suplantación.
-3. **Estado efímero.** `RoomRegistry` vive en memoria del proceso; un reinicio
-   del servidor tira todas las salas activas y no hay persistencia de
-   sesiones, claims ni eventos.
-4. **Dos planos de señalización.** Mantener Socket.IO + PeerJS duplica la
-   superficie de integración del cliente y complica razonar sobre eventos
-   (`peer:call`, `peer:signal`, `room:join`, `participant:update`).
-5. **NAT/TURN no provisionado.** La señalización negocia ICE, pero no existe
-   un servidor TURN para peers detrás de NAT simétrico. Sin coturn, las
-   llamadas fallan fuera de redes domésticas.
-6. **Observabilidad nula.** No hay métricas, trazas ni logs estructurados del
-   ciclo de vida de una llamada, lo que impide diagnosticar incidentes.
-7. **Escalado horizontal bloqueado.** El plan actual no distingue entre
-   plano de control (autoritativo) y plano de medios (cómputo). Escalar
-   procesos NestJS no escala la capacidad de medios.
-
-Necesitamos una arquitectura que cubra M1 (1–10 participantes por sala,
-state machine, JWT, persistencia) y M2–M4 (media-provider, presence,
-notifications, observability) sin reescribir la base en cada hito.
+Una arquitectura basada exclusivamente en `socket.io-client` no cumple (1)
+y (4): P2P mesh no escala más allá de 3–4 pares, y los medios viven en el
+cliente. Un broker de señalización público (estilo PeerJS Cloud) no cumple
+(2): el broker no valida al usuario contra Koom y la autenticación queda
+delegada en un tercero fuera de nuestro control.
 
 ## Decisión
 
@@ -58,7 +51,7 @@ notificaciones.
 | ---------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | **NestJS 11**          | Plano de control: HTTP, WebSocket de señalización, máquina de estados, JWT.            | Railway, multi-instancia                       |
 | **LiveKit (SFU)**      | Plano de medios: server WebRTC, simulcast, server-side recording, egress.              | LiveKit Cloud en staging; self-hostable en M3+ |
-| **coturn**             | Servidor TURN/STUN compartido para打通 NAT simétrico.                                  | Railway/VM dedicado                           |
+| **coturn**             | Servidor TURN/STUN compartido para NAT simétrico.                                      | Railway/VM dedicado                            |
 | **Redis**              | Pub/sub entre instancias Nest, presence/online, cache de credenciales TURN efímeras.   | Upstash en dev/staging; self-hosted en prod    |
 | **Postgres / SQLite**  | Persistencia de usuarios, salas, claims, eventos, auditoría.                           | SQLite in-memory en M1; Postgres desde M2      |
 | **SPA cliente (web)**  | Browser SDK: `livekit-client` para medios + Socket.IO cliente para señalización Koom.  | Build estática, misma que ya existe            |
@@ -66,29 +59,29 @@ notificaciones.
 ### Topología lógica
 
 ```
-        ┌─────────────────┐                ┌──────────────────┐
-        │  SPA cliente A  │                │  SPA cliente B   │
-        └────────┬────────┘                └────────┬─────────┘
-                 │                                  │
-   signaling  ▲  │                          ▲       │ signaling
-   (WS+REST)  │  │ medios (SRTP/WebRTC)     │       │
-              │  ▼                          │       ▼
-        ┌─────┴────────────────┐    ┌───────┴────────────────┐
-        │   NestJS (control)   │    │     LiveKit (SFU)      │
-        │   - HTTP REST        │◄──►│   - WebRTC fan-out     │
-        │   - WS /signaling    │    │   - simulcast/egress   │
-        │   - state machine    │    │                        │
-        │   - JWT mint/verify  │    │                        │
-        └────────┬─────────────┘    └────────┬───────────────┘
-                 │                           │
-        ┌────────┴───────┐            ┌──────┴───────┐
-        │ Postgres/SQLite│            │   Redis      │
-        └────────────────┘            └──────────────┘
-                                            ▲
-                                  ┌─────────┴──────────┐
-                                  │       coturn       │
-                                  │ (TURN/STUN)        │
-                                  └────────────────────┘
+         ┌─────────────────┐                ┌──────────────────┐
+         │  SPA cliente A  │                │  SPA cliente B   │
+         └────────┬────────┘                └────────┬─────────┘
+                  │                                  │
+    signaling  ▲  │                          ▲       │ signaling
+    (WS+REST)  │  │ medios (SRTP/WebRTC)     │       │
+               │  ▼                          │       ▼
+         ┌─────┴────────────────┐    ┌───────┴────────────────┐
+         │   NestJS (control)   │    │     LiveKit (SFU)      │
+         │   - HTTP REST        │◄──►│   - WebRTC fan-out     │
+         │   - WS /signaling    │    │   - simulcast/egress   │
+         │   - state machine    │    │                        │
+         │   - JWT mint/verify  │    │                        │
+         └────────┬─────────────┘    └────────┬───────────────┘
+                  │                           │
+         ┌────────┴───────┐            ┌──────┴───────┐
+         │ Postgres/SQLite│            │   Redis      │
+         └────────────────┘            └──────────────┘
+                                             ▲
+                                   ┌─────────┴──────────┐
+                                   │       coturn       │
+                                   │ (TURN/STUN)        │
+                                   └────────────────────┘
 ```
 
 ### Reglas de la arquitectura
@@ -102,8 +95,9 @@ notificaciones.
    idempotentes y registradas en persistencia.
 3. **Señalización de negocio** (join, leave, mute, raise-hand, kick) viaja
    por Socket.IO namespace `/signaling`. **Medios** (audio/video/data
-   channel) viajan siempre a/desde LiveKit. **No** se reusa PeerJS ni
-   DataChannel ad-hoc para medios.
+   channel) viajan siempre a/desde LiveKit. **No** se reusan DataChannels
+   ad-hoc ni librerías de plano-medio en cliente: el SDK de LiveKit es la
+   única vía para mover audio/video.
 4. **TURN** se sirve vía coturn con autenticación de tiempo limitado
    (REST API `TURN_URL` + `TURN_SHARED_SECRET`, `TURN_TTL`). Las
    credenciales efímeras se firman en Nest y se entregan al cliente en el
@@ -119,38 +113,12 @@ notificaciones.
    WS, y eventos de dominio (`call.started`, `call.ended`) emitidos a
    Redis para que un consumidor externo los observe sin re-deployar.
 
-### Plan de retirada de PeerJS (progresivo, no big-bang)
-
-PeerJS resolvió la iteración M0 pero ya no aporta valor diferencial sobre
-un SFU. La retirada se hace por **feature flag** y **versionado de
-cliente**, en cuatro fases:
-
-- **M1 (este ticket + LBR-67/68/69).** LBR-66 introduce el esquema
-  `env.schema.ts` y mantiene `peer.*` en `AppConfig` marcado como
-  `deprecated`; LBR-67 es el ticket que flipa el default a `false` y
-  mueve el `PeerModule` fuera del arranque. `main.ts` ya sólo arranca
-  el broker si `enablePeerServer === true` o `config.peer.enabled === true`
-  (sin cambio de comportamiento en este ticket).
-- **M2.** `MediaProvider` se materializa contra LiveKit. La SPA oficial
-  deja de importar `peerjs`. Tests e2e del broker PeerJS se mueven a
-  `test/legacy/` y se marcan como skipped por defecto.
-- **M3.** Retirada del `PeerModule` del `app.module.ts`; `peer/peer-server.ts`
-  y `peer-server.spec.ts` se mueven a `libs/peer-legacy/` (paquete no
-  incluido en el build principal). Cualquier despliegue que aún dependa
-  del broker debe montar el binario legacy por su cuenta.
-- **M4.** Eliminación de la dependencia `peer` de `package.json` y de
-  `coturn:legacy` del repo. Las variables `PEER_*` y los campos
-  `peer.*` en `AppConfig` desaparecen; el validador emite warning y,
-  tras M4.1, error.
-
-### Hitos del producto (LBR-66–LBR-69)
+### Hitos del producto (LBR-66/68/69)
 
 - **LBR-66 — ADR + contrato de configuración.** Este documento y el
   esquema `env.schema.ts` con `zod`. Fija la superficie de variables y
-  el shape de `AppConfig.env`.
-- **LBR-67 — Restructuración y retirada de PeerJS (M1).** Quita el broker
-  del arranque por defecto; `app.module.ts` deja de importar
-  `PeerModule` cuando `peer.enabled === false`.
+  el shape de `AppConfig.env`. Las variables retiradas del flujo legacy
+  (PeerJS) ya no aparecen en el validador.
 - **LBR-68 — Persistencia con TypeORM (M1).** Entidades `User`, `Room`,
   `Call`, `Participant`, migraciones, repos. SQLite en dev, Postgres en
   staging/prod.
@@ -171,13 +139,11 @@ y M4 (observability) se detallan en futuros ADRs.
 - **Calidad consistente.** Simulcast, bandwidth estimation y server-side
   recording son provistos por LiveKit en lugar de pelear con mesh.
 - **Modelo de seguridad unificado.** Un solo JWT canjeado por tokens de
-  medios. PeerJS sin auth deja de ser vector de ataque.
+  medios. No hay broker de señalización externo en la ruta crítica.
 - **Persistencia y observabilidad desde M1.** Salas y eventos viven en
   base de datos, no en memoria.
 - **Ruta de evolución clara.** La interfaz `MediaProvider` permite
   cambiar de SFU sin reescribir el control plane.
-- **Compatibilidad hacia atrás.** Las variables `PEER_*` siguen vivas en
-  M1 para no romper despliegues; la retirada es opcional y gradual.
 
 ### Negativas / Riesgos
 
@@ -190,8 +156,6 @@ y M4 (observability) se detallan en futuros ADRs.
 - **Operación adicional** (Redis, coturn, potencialmente LiveKit
   self-host). Mitigación: en M1 sólo Redis es necesario; coturn llega
   con M2. Se documenta en `docs/adr/` y en el runbook.
-- **Trabajo de retirada de PeerJS.** Requiere 3 milestones adicionales
-  para no romper despliegues existentes.
 - **Más configuración.** El archivo `.env.example` crece. Se compensa
   con el validador `zod` (LBR-66) que detecta errores en boot.
 
@@ -200,19 +164,23 @@ y M4 (observability) se detallan en futuros ADRs.
 - Se introduce `zod` como dependencia de runtime para validación de
   configuración. No se añade `class-validator` (decisión de scope).
 - El contrato `AppConfig` se amplía con un campo `env: ParsedEnv`. Esto
-  es retrocompatible: los campos existentes (`httpPort`, `peer.*`,
-  `signaling.*`) no cambian de forma.
+  es retrocompatible: los campos existentes (`httpPort`,
+  `signaling.*`) no cambian de forma. El bloque `peer.*` fue retirado
+  junto con el broker PeerJS (M3).
 
 ## Alternativas consideradas
 
-### 1. Mesh P2P + PeerJS (status quo)
+### 1. Mesh P2P + broker de señalización (estilo PeerJS, descartado)
 
-- **A favor:** Ya implementado; funciona 1-a-1; mínima infraestructura.
+- **A favor:** Mínima infraestructura; funciona 1-a-1; iteración
+  rápida en M0.
+- **A favor:** Iteración rápida; stack conocido.
 - **En contra:** No escala más allá de 3–4 participantes; broker sin
-  autenticación; sin persistencia; sin TURN provisionado; dos planos de
-  señalización.
-- **Veredicto:** Insuficiente para M1+. Mantenido en M1 sólo por
-  compatibilidad; retirado en M2–M4.
+  autenticación contra el sistema de identidad Koom; sin persistencia;
+  sin TURN provisionado; dos planos de señalización.
+- **Veredicto:** Insuficiente para M1+. Retirado en M3. Mantenido
+  brevemente como `enablePeerServer` opt-in durante la migración y
+  eliminado en este ADR.
 
 ### 2. mediasoup (SFU programable en Node/C++)
 
@@ -258,9 +226,9 @@ y M4 (observability) se detallan en futuros ADRs.
 |   socket.io-client  ─────►  /signaling  (negocio)             |
 |   livekit-client    ─────►  LiveKit     (medios)               |
 +----------------------------------------------------------------+
-            │                                │
-            │ WS + REST                      │ SRTP/DTLS
-            ▼                                ▼
+             │                                │
+             │ WS + REST                      │ SRTP/DTLS
+             ▼                                ▼
 +-----------------------------+    +-----------------------------+
 |   NestJS (control plane)    |    |   LiveKit (SFU, medios)     |
 |                             |    |                             |
@@ -275,8 +243,8 @@ y M4 (observability) se detallan en futuros ADRs.
 |  - PersistenceModule (DB)   |    |                             |
 |  - MediaProvider  (tokens)  |◄──►|  (token mint, webhooks)     |
 +-----------------------------+    +-----------------------------+
-            │           ▲                          ▲
-            ▼           │ pub/sub                  │ TURN/STUN
+             │           ▲                          ▲
+             ▼           │ pub/sub                  │ TURN/STUN
 +----------------+  +-------------+         +---------------+
 |  Postgres/     |  |   Redis     |         |    coturn     |
 |  SQLite        |  |  pub/sub +  |         | (auth efímera)|
@@ -294,6 +262,7 @@ y M4 (observability) se detallan en futuros ADRs.
 - `AppConfig` extiende con un campo `env: ParsedEnv` poblado por
   `parseEnv(process.env)` en el boot. `parseEnv` valida con `zod` y,
   en desarrollo, auto-genera un `JWT_SECRET` emitiendo un warning.
-- Los campos `peer.*` se mantienen por compatibilidad con M0; se
-  documentan como `deprecated` en el validador y se retiran
-  progresivamente en M2–M4.
+- El validador `env.schema.ts` ya no expone variables del flujo legacy
+  (PeerJS). Cualquier despliegue que aún las enviaba debe eliminarlas
+  del `.env` (serán ignoradas por el validador gracias a `passthrough`,
+  pero se consideran obsoletas).

@@ -1,15 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { bootstrap } from './main';
-import { startPeerServer } from './_deprecated/peer/peer-server';
-
-jest.mock('./_deprecated/peer/peer-server', () => ({
-  startPeerServer: jest.fn(),
-}));
-
-const startPeerServerMock = startPeerServer as jest.MockedFunction<
-  typeof startPeerServer
->;
 
 describe('bootstrap()', () => {
   let logSpy: jest.SpyInstance;
@@ -17,7 +8,6 @@ describe('bootstrap()', () => {
   let listenSpy: jest.Mock;
 
   beforeEach(() => {
-    startPeerServerMock.mockClear();
     listenSpy = jest.fn().mockResolvedValue(undefined);
     const fakeConfigService = {
       get: jest.fn((key: string) => {
@@ -27,10 +17,6 @@ describe('bootstrap()', () => {
       getOrThrow: jest.fn((key: string) => {
         if (key === 'PORT') return 8080;
         if (key === 'SIGNALING_NAMESPACE') return '/signaling';
-        if (key === 'PEER_PORT') return 9000;
-        if (key === 'PEER_KEY') return 'peerjs';
-        if (key === 'PEER_PATH') return '/';
-        if (key === 'PEER_ALLOW_DISCOVERY') return false;
         throw new Error(`unexpected key ${key}`);
       }),
     };
@@ -56,31 +42,12 @@ describe('bootstrap()', () => {
     jest.restoreAllMocks();
   });
 
-  it('does NOT spawn the peer server by default', async () => {
-    await bootstrap();
-    expect(startPeerServerMock).not.toHaveBeenCalled();
-  });
-
-  it('does NOT log PeerJS broker / PeerJS WS in the banner by default', async () => {
-    await bootstrap();
-    const all = logSpy.mock.calls
-      .map((c: unknown[]) => String(c[0]))
-      .join('\n');
-    expect(all).not.toContain('PeerJS broker');
-    expect(all).not.toContain('PeerJS WS');
-  });
-
-  it('still logs the signaling server banner', async () => {
+  it('logs the signaling server banner', async () => {
     await bootstrap();
     const all = logSpy.mock.calls
       .map((c: unknown[]) => String(c[0]))
       .join('\n');
     expect(all).toContain('Signaling server listening');
     expect(all).toContain('Socket.IO signaling');
-  });
-
-  it('spawns the peer server only when explicitly opted in', async () => {
-    await bootstrap({ enablePeerServer: true });
-    expect(startPeerServerMock).toHaveBeenCalledTimes(1);
   });
 });

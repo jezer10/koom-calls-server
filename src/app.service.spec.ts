@@ -1,7 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { AppService } from './app.service';
 
-function makeConfigService(values: Record<string, string | number>): ConfigService {
+function makeConfigService(
+  values: Record<string, string | number>,
+): ConfigService {
   const lookup = (key: string): string | number | undefined => values[key];
   return {
     get: <T = string | number>(key: string): T | undefined =>
@@ -27,35 +29,13 @@ describe('AppService', () => {
   });
 
   describe('getInfo()', () => {
-    it('returns default configuration when no env vars are set', () => {
+    it('exposes signaling namespace and LiveKit as the media provider', () => {
       service = new AppService(
-        makeConfigService({
-          SIGNALING_NAMESPACE: '/signaling',
-          PEER_PORT: 9000,
-          PEER_KEY: 'peerjs',
-          PEER_PATH: '/',
-        }),
+        makeConfigService({ SIGNALING_NAMESPACE: '/signaling' }),
       );
       const info = service.getInfo();
       expect(info.signaling.namespace).toBe('/signaling');
-      expect(info.peer.port).toBe(9000);
-      expect(info.peer.key).toBe('peerjs');
-      expect(info.peer.path).toBe('/');
-      expect(info.peer.enabled).toBe(true);
-    });
-
-    it('honors SKIP_PEER=1', () => {
-      service = new AppService(
-        makeConfigService({
-          SIGNALING_NAMESPACE: '/signaling',
-          PEER_PORT: 9000,
-          PEER_KEY: 'peerjs',
-          PEER_PATH: '/',
-          SKIP_PEER: '1',
-        }),
-      );
-      const info = service.getInfo();
-      expect(info.peer.enabled).toBe(false);
+      expect(info.media.provider).toBe('livekit');
     });
   });
 

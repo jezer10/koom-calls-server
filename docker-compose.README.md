@@ -110,7 +110,6 @@ The hostnames used inside the API container — `postgres`, `redis`,
 | `PORT`                    | `8080`                                                   | API HTTP port.                     |
 | `SIGNALING_NAMESPACE`     | `/signaling`                                             | Socket.IO namespace.               |
 | `CORS_ORIGIN`             | `*`                                                      | Restrict in production.            |
-| `SKIP_PEER`               | `1`                                                      | Set to `1` to disable the PeerJS broker inside the API container. |
 | `LIVEKIT_URL`             | `ws://livekit:7880`                                      |                                    |
 | `LIVEKIT_API_KEY`         | `devkey`                                                 |                                    |
 | `LIVEKIT_API_SECRET`      | `devsecret-please-change`                                |                                    |

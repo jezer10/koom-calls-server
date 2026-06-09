@@ -4,23 +4,6 @@ import { z } from 'zod';
 export const NODE_ENV_VALUES = ['development', 'test', 'production'] as const;
 export type NodeEnv = (typeof NODE_ENV_VALUES)[number];
 
-const booleanFromString = (fallback: boolean) =>
-  z.preprocess((value: unknown) => {
-    if (value === undefined || value === null || value === '') return undefined;
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number') return value !== 0;
-    if (typeof value === 'string') {
-      const normalized = value.trim().toLowerCase();
-      if (normalized === '1' || normalized === 'true' || normalized === 'yes') {
-        return true;
-      }
-      if (normalized === '0' || normalized === 'false' || normalized === 'no') {
-        return false;
-      }
-    }
-    return undefined;
-  }, z.boolean().default(fallback));
-
 const numberFromString = (fallback: number) =>
   z.preprocess((value: unknown) => {
     if (value === undefined || value === null || value === '') return undefined;
@@ -105,6 +88,7 @@ export function buildEnvSchema(
       LIVEKIT_URL: z.string().default(''),
       LIVEKIT_API_KEY: z.string().default(''),
       LIVEKIT_API_SECRET: z.string().default(''),
+      LIVEKIT_HTTP_URL: z.string().default(''),
       SFU_URL: z.string().default(''),
       REDIS_URL: z.string().default(''),
       TURN_URL: z.string().default(''),
@@ -112,11 +96,6 @@ export function buildEnvSchema(
       TURN_SHARED_SECRET: z.string().default(''),
       TURN_TTL: numberFromString(3600),
       TURN_TOKEN_TTL_SECONDS: numberFromString(3600),
-      PEER_ENABLED: booleanFromString(false),
-      PEER_PORT: numberFromString(9000),
-      PEER_KEY: z.string().default('peerjs'),
-      PEER_PATH: z.string().default('/'),
-      PEER_ALLOW_DISCOVERY: booleanFromString(false),
       RATE_LIMIT_SOCKET_PER_SECOND: numberFromString(20),
       RATE_LIMIT_USER_PER_SECOND: numberFromString(10),
       RATE_LIMIT_IP_PER_SECOND: numberFromString(30),
@@ -160,6 +139,7 @@ export type ParsedEnv = {
   LIVEKIT_URL: string;
   LIVEKIT_API_KEY: string;
   LIVEKIT_API_SECRET: string;
+  LIVEKIT_HTTP_URL: string;
   SFU_URL: string;
   REDIS_URL: string;
   TURN_URL: string;
@@ -167,11 +147,6 @@ export type ParsedEnv = {
   TURN_SHARED_SECRET: string;
   TURN_TTL: number;
   TURN_TOKEN_TTL_SECONDS: number;
-  PEER_ENABLED: boolean;
-  PEER_PORT: number;
-  PEER_KEY: string;
-  PEER_PATH: string;
-  PEER_ALLOW_DISCOVERY: boolean;
   RATE_LIMIT_SOCKET_PER_SECOND: number;
   RATE_LIMIT_USER_PER_SECOND: number;
   RATE_LIMIT_IP_PER_SECOND: number;
@@ -236,6 +211,7 @@ function pickParsed(raw: Record<string, unknown>): ParsedEnv {
     LIVEKIT_URL: raw['LIVEKIT_URL'] as string,
     LIVEKIT_API_KEY: raw['LIVEKIT_API_KEY'] as string,
     LIVEKIT_API_SECRET: raw['LIVEKIT_API_SECRET'] as string,
+    LIVEKIT_HTTP_URL: raw['LIVEKIT_HTTP_URL'] as string,
     SFU_URL: raw['SFU_URL'] as string,
     REDIS_URL: raw['REDIS_URL'] as string,
     TURN_URL: raw['TURN_URL'] as string,
@@ -243,11 +219,6 @@ function pickParsed(raw: Record<string, unknown>): ParsedEnv {
     TURN_SHARED_SECRET: raw['TURN_SHARED_SECRET'] as string,
     TURN_TTL: raw['TURN_TTL'] as number,
     TURN_TOKEN_TTL_SECONDS: raw['TURN_TOKEN_TTL_SECONDS'] as number,
-    PEER_ENABLED: raw['PEER_ENABLED'] as boolean,
-    PEER_PORT: raw['PEER_PORT'] as number,
-    PEER_KEY: raw['PEER_KEY'] as string,
-    PEER_PATH: raw['PEER_PATH'] as string,
-    PEER_ALLOW_DISCOVERY: raw['PEER_ALLOW_DISCOVERY'] as boolean,
     RATE_LIMIT_SOCKET_PER_SECOND: raw['RATE_LIMIT_SOCKET_PER_SECOND'] as number,
     RATE_LIMIT_USER_PER_SECOND: raw['RATE_LIMIT_USER_PER_SECOND'] as number,
     RATE_LIMIT_IP_PER_SECOND: raw['RATE_LIMIT_IP_PER_SECOND'] as number,
