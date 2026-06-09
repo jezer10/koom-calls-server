@@ -12,7 +12,8 @@ export class StaticSfuService implements SfuService {
 
   constructor(configService: ConfigService) {
     this.sfuUrl =
-      configService.get<string>('SFU_URL') ?? 'wss://sfu.koom.example.com/v1/rtc';
+      configService.get<string>('SFU_URL') ??
+      'wss://sfu.koom.example.com/v1/rtc';
     this.jwtSecret = configService.getOrThrow<string>('JWT_SECRET');
   }
 

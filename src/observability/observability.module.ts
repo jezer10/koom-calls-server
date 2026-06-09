@@ -62,7 +62,8 @@ interface HttpLikeResponse {
               res: HttpLikeResponse,
               err?: unknown,
             ) => {
-              if (req.url === '/metrics' || req.url === '/health') return 'silent';
+              if (req.url === '/metrics' || req.url === '/health')
+                return 'silent';
               if (err || Number(res.statusCode) >= 500) return 'error';
               if (Number(res.statusCode) >= 400) return 'warn';
               return 'info';

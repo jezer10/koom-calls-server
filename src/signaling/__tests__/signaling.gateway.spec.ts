@@ -22,7 +22,8 @@ function makeConfigService(): ConfigService {
       if (key in values) return values[key] as unknown as T;
       throw new Error(`unexpected key ${key}`);
     },
-    get: <T = string>(key: string): T | undefined => values[key] as unknown as T,
+    get: <T = string>(key: string): T | undefined =>
+      values[key] as unknown as T,
   } as unknown as ConfigService;
 }
 
