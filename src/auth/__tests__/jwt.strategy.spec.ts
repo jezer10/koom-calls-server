@@ -1,38 +1,24 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
-import {
-  JwtStrategy,
-  resolveJwtSecret,
-  type JwtPayload,
-} from '../jwt.strategy';
+import { JwtStrategy, type JwtPayload } from '../jwt.strategy';
 
 const SECRET = 'test-jwt-secret-please-change';
 
+function makeConfigService(): ConfigService {
+  return {
+    getOrThrow: <T = string>(key: string): T => {
+      if (key === 'JWT_SECRET') return SECRET as unknown as T;
+      throw new Error(`unexpected key ${key}`);
+    },
+  } as unknown as ConfigService;
+}
+
 describe('JwtStrategy', () => {
-  const originalEnv = { ...process.env };
   let strategy: JwtStrategy;
 
   beforeEach(() => {
-    process.env.JWT_SECRET = SECRET;
-    strategy = new JwtStrategy();
-  });
-
-  afterEach(() => {
-    process.env = { ...originalEnv };
-  });
-
-  describe('resolveJwtSecret', () => {
-    it('returns the secret from the env', () => {
-      expect(resolveJwtSecret({ JWT_SECRET: 'abc' })).toBe('abc');
-    });
-
-    it('throws when the secret is missing', () => {
-      expect(() => resolveJwtSecret({})).toThrow(/JWT_SECRET/);
-    });
-
-    it('throws when the secret is empty', () => {
-      expect(() => resolveJwtSecret({ JWT_SECRET: '' })).toThrow(/JWT_SECRET/);
-    });
+    strategy = new JwtStrategy(makeConfigService());
   });
 
   describe('validate()', () => {
