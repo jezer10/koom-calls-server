@@ -100,18 +100,31 @@ export function buildEnvSchema(
       DATABASE_URL: z.string().default('sqlite::memory:'),
       JWT_SECRET: jwtSecretField,
       JWT_TTL: z.string().default('1h'),
+      JWT_AUDIENCE: z.string().optional(),
+      JWT_ISSUER: z.string().optional(),
       LIVEKIT_URL: z.string().default(''),
       LIVEKIT_API_KEY: z.string().default(''),
       LIVEKIT_API_SECRET: z.string().default(''),
+      SFU_URL: z.string().default(''),
       REDIS_URL: z.string().default(''),
       TURN_URL: z.string().default(''),
+      TURN_URLS: z.string().default(''),
       TURN_SHARED_SECRET: z.string().default(''),
       TURN_TTL: numberFromString(3600),
+      TURN_TOKEN_TTL_SECONDS: numberFromString(3600),
       PEER_ENABLED: booleanFromString(false),
       PEER_PORT: numberFromString(9000),
       PEER_KEY: z.string().default('peerjs'),
       PEER_PATH: z.string().default('/'),
       PEER_ALLOW_DISCOVERY: booleanFromString(false),
+      RATE_LIMIT_SOCKET_PER_SECOND: numberFromString(20),
+      RATE_LIMIT_USER_PER_SECOND: numberFromString(10),
+      RATE_LIMIT_IP_PER_SECOND: numberFromString(30),
+      RATE_LIMIT_SOCKET_BURST: numberFromString(5),
+      RATE_LIMIT_USER_BURST: numberFromString(3),
+      RATE_LIMIT_IP_BURST: numberFromString(8),
+      SFU_TOKEN_TTL_SECONDS: numberFromString(3600),
+      LOG_LEVEL: z.string().default('debug'),
       NODE_ENV: nodeEnvField,
     })
     .passthrough();
@@ -124,18 +137,31 @@ export type ParsedEnv = {
   DATABASE_URL: string;
   JWT_SECRET: string;
   JWT_TTL: string;
+  JWT_AUDIENCE?: string;
+  JWT_ISSUER?: string;
   LIVEKIT_URL: string;
   LIVEKIT_API_KEY: string;
   LIVEKIT_API_SECRET: string;
+  SFU_URL: string;
   REDIS_URL: string;
   TURN_URL: string;
+  TURN_URLS: string;
   TURN_SHARED_SECRET: string;
   TURN_TTL: number;
+  TURN_TOKEN_TTL_SECONDS: number;
   PEER_ENABLED: boolean;
   PEER_PORT: number;
   PEER_KEY: string;
   PEER_PATH: string;
   PEER_ALLOW_DISCOVERY: boolean;
+  RATE_LIMIT_SOCKET_PER_SECOND: number;
+  RATE_LIMIT_USER_PER_SECOND: number;
+  RATE_LIMIT_IP_PER_SECOND: number;
+  RATE_LIMIT_SOCKET_BURST: number;
+  RATE_LIMIT_USER_BURST: number;
+  RATE_LIMIT_IP_BURST: number;
+  SFU_TOKEN_TTL_SECONDS: number;
+  LOG_LEVEL: string;
   NODE_ENV: NodeEnv;
 };
 
@@ -186,18 +212,31 @@ function pickParsed(raw: Record<string, unknown>): ParsedEnv {
     DATABASE_URL: raw['DATABASE_URL'] as string,
     JWT_SECRET: raw['JWT_SECRET'] as string,
     JWT_TTL: raw['JWT_TTL'] as string,
+    JWT_AUDIENCE: raw['JWT_AUDIENCE'] as string | undefined,
+    JWT_ISSUER: raw['JWT_ISSUER'] as string | undefined,
     LIVEKIT_URL: raw['LIVEKIT_URL'] as string,
     LIVEKIT_API_KEY: raw['LIVEKIT_API_KEY'] as string,
     LIVEKIT_API_SECRET: raw['LIVEKIT_API_SECRET'] as string,
+    SFU_URL: raw['SFU_URL'] as string,
     REDIS_URL: raw['REDIS_URL'] as string,
     TURN_URL: raw['TURN_URL'] as string,
+    TURN_URLS: raw['TURN_URLS'] as string,
     TURN_SHARED_SECRET: raw['TURN_SHARED_SECRET'] as string,
     TURN_TTL: raw['TURN_TTL'] as number,
+    TURN_TOKEN_TTL_SECONDS: raw['TURN_TOKEN_TTL_SECONDS'] as number,
     PEER_ENABLED: raw['PEER_ENABLED'] as boolean,
     PEER_PORT: raw['PEER_PORT'] as number,
     PEER_KEY: raw['PEER_KEY'] as string,
     PEER_PATH: raw['PEER_PATH'] as string,
     PEER_ALLOW_DISCOVERY: raw['PEER_ALLOW_DISCOVERY'] as boolean,
+    RATE_LIMIT_SOCKET_PER_SECOND: raw['RATE_LIMIT_SOCKET_PER_SECOND'] as number,
+    RATE_LIMIT_USER_PER_SECOND: raw['RATE_LIMIT_USER_PER_SECOND'] as number,
+    RATE_LIMIT_IP_PER_SECOND: raw['RATE_LIMIT_IP_PER_SECOND'] as number,
+    RATE_LIMIT_SOCKET_BURST: raw['RATE_LIMIT_SOCKET_BURST'] as number,
+    RATE_LIMIT_USER_BURST: raw['RATE_LIMIT_USER_BURST'] as number,
+    RATE_LIMIT_IP_BURST: raw['RATE_LIMIT_IP_BURST'] as number,
+    SFU_TOKEN_TTL_SECONDS: raw['SFU_TOKEN_TTL_SECONDS'] as number,
+    LOG_LEVEL: raw['LOG_LEVEL'] as string,
     NODE_ENV: raw['NODE_ENV'] as NodeEnv,
   };
 }

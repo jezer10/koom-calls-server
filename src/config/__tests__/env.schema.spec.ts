@@ -17,18 +17,31 @@ describe('parseEnv', () => {
       'DATABASE_URL',
       'JWT_SECRET',
       'JWT_TTL',
+      'JWT_AUDIENCE',
+      'JWT_ISSUER',
       'LIVEKIT_URL',
       'LIVEKIT_API_KEY',
       'LIVEKIT_API_SECRET',
+      'SFU_URL',
       'REDIS_URL',
       'TURN_URL',
+      'TURN_URLS',
       'TURN_SHARED_SECRET',
       'TURN_TTL',
+      'TURN_TOKEN_TTL_SECONDS',
       'PEER_ENABLED',
       'PEER_PORT',
       'PEER_KEY',
       'PEER_PATH',
       'PEER_ALLOW_DISCOVERY',
+      'RATE_LIMIT_SOCKET_PER_SECOND',
+      'RATE_LIMIT_USER_PER_SECOND',
+      'RATE_LIMIT_IP_PER_SECOND',
+      'RATE_LIMIT_SOCKET_BURST',
+      'RATE_LIMIT_USER_BURST',
+      'RATE_LIMIT_IP_BURST',
+      'SFU_TOKEN_TTL_SECONDS',
+      'LOG_LEVEL',
       'NODE_ENV',
     ]) {
       delete process.env[key];
@@ -47,18 +60,31 @@ describe('parseEnv', () => {
       expect(parsed.SIGNALING_NAMESPACE).toBe('/signaling');
       expect(parsed.DATABASE_URL).toBe('sqlite::memory:');
       expect(parsed.JWT_TTL).toBe('1h');
+      expect(parsed.JWT_AUDIENCE).toBeUndefined();
+      expect(parsed.JWT_ISSUER).toBeUndefined();
       expect(parsed.LIVEKIT_URL).toBe('');
       expect(parsed.LIVEKIT_API_KEY).toBe('');
       expect(parsed.LIVEKIT_API_SECRET).toBe('');
+      expect(parsed.SFU_URL).toBe('');
       expect(parsed.REDIS_URL).toBe('');
       expect(parsed.TURN_URL).toBe('');
+      expect(parsed.TURN_URLS).toBe('');
       expect(parsed.TURN_SHARED_SECRET).toBe('');
       expect(parsed.TURN_TTL).toBe(3600);
+      expect(parsed.TURN_TOKEN_TTL_SECONDS).toBe(3600);
       expect(parsed.PEER_ENABLED).toBe(false);
       expect(parsed.PEER_PORT).toBe(9000);
       expect(parsed.PEER_KEY).toBe('peerjs');
       expect(parsed.PEER_PATH).toBe('/');
       expect(parsed.PEER_ALLOW_DISCOVERY).toBe(false);
+      expect(parsed.RATE_LIMIT_SOCKET_PER_SECOND).toBe(20);
+      expect(parsed.RATE_LIMIT_USER_PER_SECOND).toBe(10);
+      expect(parsed.RATE_LIMIT_IP_PER_SECOND).toBe(30);
+      expect(parsed.RATE_LIMIT_SOCKET_BURST).toBe(5);
+      expect(parsed.RATE_LIMIT_USER_BURST).toBe(3);
+      expect(parsed.RATE_LIMIT_IP_BURST).toBe(8);
+      expect(parsed.SFU_TOKEN_TTL_SECONDS).toBe(3600);
+      expect(parsed.LOG_LEVEL).toBe('debug');
       expect(parsed.NODE_ENV).toBe('development');
       expect(typeof parsed.JWT_SECRET).toBe('string');
       expect(parsed.JWT_SECRET.length).toBeGreaterThan(0);
@@ -240,6 +266,71 @@ describe('parseEnv', () => {
       const schema = buildEnvSchema({}, { onWarning: (msg) => seen.push(msg) });
       schema.parse({});
       expect(seen).toHaveLength(1);
+    });
+  });
+
+  describe('newly declared variables (CONFIG-1)', () => {
+    it('TURN_URLS defaults to empty string', () => {
+      expect(parseEnv({}).TURN_URLS).toBe('');
+      expect(parseEnv({ TURN_URLS: 'turn:a:3478,turn:b:3478' }).TURN_URLS)
+        .toBe('turn:a:3478,turn:b:3478');
+    });
+
+    it('SFU_URL defaults to empty string', () => {
+      expect(parseEnv({}).SFU_URL).toBe('');
+      expect(parseEnv({ SFU_URL: 'wss://sfu.example.com/v1/rtc' }).SFU_URL)
+        .toBe('wss://sfu.example.com/v1/rtc');
+    });
+
+    it('LOG_LEVEL defaults to debug', () => {
+      expect(parseEnv({}).LOG_LEVEL).toBe('debug');
+      expect(parseEnv({ LOG_LEVEL: 'info' }).LOG_LEVEL).toBe('info');
+      expect(parseEnv({ LOG_LEVEL: 'warn' }).LOG_LEVEL).toBe('warn');
+    });
+
+    it('JWT_AUDIENCE and JWT_ISSUER are optional and only present when set', () => {
+      expect(parseEnv({}).JWT_AUDIENCE).toBeUndefined();
+      expect(parseEnv({}).JWT_ISSUER).toBeUndefined();
+      expect(parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_AUDIENCE)
+        .toBe('koom');
+      expect(parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_ISSUER)
+        .toBe('koom-iss');
+    });
+
+    it('rate-limit fields default to the documented values', () => {
+      const parsed = parseEnv({});
+      expect(parsed.RATE_LIMIT_SOCKET_PER_SECOND).toBe(20);
+      expect(parsed.RATE_LIMIT_USER_PER_SECOND).toBe(10);
+      expect(parsed.RATE_LIMIT_IP_PER_SECOND).toBe(30);
+      expect(parsed.RATE_LIMIT_SOCKET_BURST).toBe(5);
+      expect(parsed.RATE_LIMIT_USER_BURST).toBe(3);
+      expect(parsed.RATE_LIMIT_IP_BURST).toBe(8);
+    });
+
+    it('rate-limit fields accept numeric strings', () => {
+      const parsed = parseEnv({
+        RATE_LIMIT_SOCKET_PER_SECOND: '50',
+        RATE_LIMIT_USER_PER_SECOND: '40',
+        RATE_LIMIT_IP_PER_SECOND: '60',
+        RATE_LIMIT_SOCKET_BURST: '15',
+        RATE_LIMIT_USER_BURST: '10',
+        RATE_LIMIT_IP_BURST: '20',
+      });
+      expect(parsed.RATE_LIMIT_SOCKET_PER_SECOND).toBe(50);
+      expect(parsed.RATE_LIMIT_USER_PER_SECOND).toBe(40);
+      expect(parsed.RATE_LIMIT_IP_PER_SECOND).toBe(60);
+      expect(parsed.RATE_LIMIT_SOCKET_BURST).toBe(15);
+      expect(parsed.RATE_LIMIT_USER_BURST).toBe(10);
+      expect(parsed.RATE_LIMIT_IP_BURST).toBe(20);
+    });
+
+    it('SFU_TOKEN_TTL_SECONDS and TURN_TOKEN_TTL_SECONDS default to 3600', () => {
+      expect(parseEnv({}).SFU_TOKEN_TTL_SECONDS).toBe(3600);
+      expect(parseEnv({}).TURN_TOKEN_TTL_SECONDS).toBe(3600);
+      expect(parseEnv({ SFU_TOKEN_TTL_SECONDS: '1800' }).SFU_TOKEN_TTL_SECONDS)
+        .toBe(1800);
+      expect(parseEnv({ TURN_TOKEN_TTL_SECONDS: '7200' }).TURN_TOKEN_TTL_SECONDS)
+        .toBe(7200);
     });
   });
 });
