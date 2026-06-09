@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
@@ -21,29 +22,13 @@ export interface JwtUser {
 
 export const JWT_SECRET_ENV = 'JWT_SECRET';
 
-export function resolveJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
-  const secret = env[JWT_SECRET_ENV];
-  if (typeof secret !== 'string' || secret === '') {
-    throw new Error(
-      `${JWT_SECRET_ENV} environment variable is required for the JWT strategy`,
-    );
-  }
-  return secret;
-}
-
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor() {
-    let secret: string;
-    try {
-      secret = resolveJwtSecret();
-    } catch {
-      secret = 'dev-secret-change-me';
-    }
+  constructor(configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret,
+      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
     });
   }
 
