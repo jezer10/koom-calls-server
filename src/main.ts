@@ -3,10 +3,6 @@ import { Logger } from '@nestjs/common';
 import { AppModule, SocketIoRedisAdapter } from './app.module';
 import { loadConfig } from './config/app.config';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'sqlite::memory:';
-}
-
 export interface BootstrapOptions {
   enablePeerServer?: boolean;
 }
