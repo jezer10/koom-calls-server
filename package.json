@@ -5,7 +5,7 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
-  "packageManager": "pnpm@10.34.1",
+  "packageManager": "pnpm@11.5.2",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -53,6 +53,7 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
     "typeorm": "^0.3.20",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
