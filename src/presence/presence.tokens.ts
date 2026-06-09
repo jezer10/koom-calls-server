@@ -1,0 +1,1 @@
+export const PRESENCE_SERVICE = Symbol('PRESENCE_SERVICE');
