@@ -19,9 +19,14 @@ describe('bootstrap()', () => {
   beforeEach(() => {
     startPeerServerMock.mockClear();
     listenSpy = jest.fn().mockResolvedValue(undefined);
+    const fakeApp = {
+      listen: listenSpy,
+      get: jest.fn().mockReturnValue({}),
+      useWebSocketAdapter: jest.fn(),
+    };
     createSpy = jest
       .spyOn(NestFactory, 'create')
-      .mockResolvedValue({ listen: listenSpy } as never);
+      .mockResolvedValue(fakeApp as never);
     logSpy = jest
       .spyOn(Logger.prototype, 'log')
       .mockImplementation(() => undefined);

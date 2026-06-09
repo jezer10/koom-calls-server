@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
-import { AppModule } from './app.module';
+import { AppModule, SocketIoRedisAdapter } from './app.module';
 import { loadConfig } from './config/app.config';
 
 if (!process.env.DATABASE_URL) {
@@ -22,6 +22,8 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<void> {
       credentials: true,
     },
   });
+
+  app.useWebSocketAdapter(app.get(SocketIoRedisAdapter));
 
   if (enablePeer) {
     // Lazy-load the legacy PeerJS wiring via require so the _deprecated

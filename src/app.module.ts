@@ -13,6 +13,12 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import {
+  SignalingAdapterModule,
+  SocketIoRedisAdapter,
+} from './signaling/signaling.adapter.module';
+
+export { SocketIoRedisAdapter };
 
 @Module({
   imports: [
@@ -21,6 +27,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     CallsModule,
     ParticipantsModule,
     SignalingModule,
+    SignalingAdapterModule,
     PresenceModule,
     MediaProviderModule,
     NotificationsModule,
@@ -29,8 +36,10 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
   controllers: [AppController],
   providers: [
     AppService,
+    SocketIoRedisAdapter,
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
   ],
+  exports: [SocketIoRedisAdapter],
 })
 export class AppModule {}
