@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 ARG NODE_VERSION=22-alpine
-ARG PNPM_VERSION=10.34.1
+ARG PNPM_VERSION=11.5.2
 
 FROM node:${NODE_VERSION} AS deps
 WORKDIR /app
