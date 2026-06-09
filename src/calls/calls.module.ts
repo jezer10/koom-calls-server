@@ -1,13 +1,41 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { CallEventsRepository } from './call-events.repository';
-import { CallsRepository } from './calls.repository';
-import { CallEntity } from './domain/call.entity';
-import { CallEventEntity } from './domain/call-event.entity';
+import {
+  CALLS_REPOSITORY,
+  CALL_EVENTS_REPOSITORY,
+  type CallEventsRepository,
+  type CallsRepository,
+} from './calls.repository.interface';
+import { CallsController, MeCallsController } from './calls.controller';
+import { CallsService } from './calls.service';
+import {
+  CALL_STATE_MACHINE,
+  createCallStateMachine,
+} from './domain/call-state.machine';
+import {
+  InMemoryCallsRepository,
+  InMemoryCallEventsRepository,
+} from './in-memory.repositories';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CallEntity, CallEventEntity])],
-  providers: [CallsRepository, CallEventsRepository],
-  exports: [CallsRepository, CallEventsRepository],
+  imports: [AuthModule],
+  controllers: [CallsController, MeCallsController],
+  providers: [
+    CallsService,
+    {
+      provide: CALL_STATE_MACHINE,
+      useFactory: () => createCallStateMachine(),
+    },
+    {
+      provide: CALLS_REPOSITORY,
+      useFactory: (): CallsRepository => new InMemoryCallsRepository(),
+    },
+    {
+      provide: CALL_EVENTS_REPOSITORY,
+      useFactory: (): CallEventsRepository =>
+        new InMemoryCallEventsRepository(),
+    },
+  ],
+  exports: [CallsService, CALL_STATE_MACHINE],
 })
 export class CallsModule {}
