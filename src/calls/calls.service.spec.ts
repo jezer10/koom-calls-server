@@ -190,6 +190,47 @@ describe('CallsService', () => {
     });
   });
 
+  describe('getCallByRoomCode / getCallByIdOrCode', () => {
+    it('resolves a call by its human-shareable room code', () => {
+      const call = service.createCall({ creatorId: 'user-1' });
+      const byCode = service.getCallByRoomCode(call.roomId);
+      expect(byCode.id).toBe(call.id);
+      expect(byCode.roomId).toBe(call.roomId);
+    });
+
+    it('throws CallNotFoundError for an unknown room code', () => {
+      expect(() => service.getCallByRoomCode('XXX-XXX-XXX')).toThrow(
+        /not found/i,
+      );
+    });
+
+    it('getCallByIdOrCode resolves a call by UUID', () => {
+      const call = service.createCall({ creatorId: 'user-1' });
+      const resolved = service.getCallByIdOrCode(call.id);
+      expect(resolved.id).toBe(call.id);
+    });
+
+    it('getCallByIdOrCode resolves a call by room code', () => {
+      const call = service.createCall({ creatorId: 'user-1' });
+      const resolved = service.getCallByIdOrCode(call.roomId);
+      expect(resolved.id).toBe(call.id);
+    });
+
+    it('getCallByIdOrCode throws when neither UUID nor room code matches', () => {
+      expect(() => service.getCallByIdOrCode('not-a-real-id')).toThrow(
+        /not found/i,
+      );
+    });
+
+    it('frees the room code from the reverse index when the call ends', () => {
+      const call = service.createCall({ creatorId: 'user-1' });
+      service.end(call.id, 'user-1');
+      // The call itself is still findable by UUID, but no longer by code.
+      expect(service.getCall(call.id).status).toBe('ended');
+      expect(() => service.getCallByRoomCode(call.roomId)).toThrow(/not found/i);
+    });
+  });
+
   describe('join()', () => {
     it('adds a new user as a link participant when the call is "link"', () => {
       const call = service.createCall({ creatorId: 'user-1' });

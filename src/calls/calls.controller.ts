@@ -96,7 +96,7 @@ export class CallsController {
   @Get(':id')
   get(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = this.calls.getCall(id);
+      const call = this.calls.getCallByIdOrCode(id);
       const userId = userIdOrThrow(req);
       if (!this.calls.isParticipant(call, userId)) {
         throw new CallForbiddenError('Not a participant of this call');
@@ -116,8 +116,9 @@ export class CallsController {
   ) {
     try {
       const dto = parseInviteCallDto(body);
-      const call = this.calls.invite(id, userIdOrThrow(req), dto.inviteeId);
-      return this.toResponse(call);
+      const call = this.calls.getCallByIdOrCode(id);
+      const updated = this.calls.invite(call.id, userIdOrThrow(req), dto.inviteeId);
+      return this.toResponse(updated);
     } catch (err) {
       throw this.translateError(err);
     }
@@ -127,8 +128,9 @@ export class CallsController {
   @HttpCode(200)
   accept(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = this.calls.accept(id, userIdOrThrow(req));
-      return this.toResponse(call);
+      const call = this.calls.getCallByIdOrCode(id);
+      const updated = this.calls.accept(call.id, userIdOrThrow(req));
+      return this.toResponse(updated);
     } catch (err) {
       throw this.translateError(err);
     }
@@ -138,8 +140,9 @@ export class CallsController {
   @HttpCode(200)
   join(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = this.calls.join(id, userIdOrThrow(req));
-      return this.toResponse(call);
+      const call = this.calls.getCallByIdOrCode(id);
+      const updated = this.calls.join(call.id, userIdOrThrow(req));
+      return this.toResponse(updated);
     } catch (err) {
       throw this.translateError(err);
     }
@@ -149,8 +152,9 @@ export class CallsController {
   @HttpCode(200)
   end(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = this.calls.end(id, userIdOrThrow(req));
-      return this.toResponse(call);
+      const call = this.calls.getCallByIdOrCode(id);
+      const updated = this.calls.end(call.id, userIdOrThrow(req));
+      return this.toResponse(updated);
     } catch (err) {
       throw this.translateError(err);
     }
@@ -160,7 +164,7 @@ export class CallsController {
   async turnCredentials(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
       const userId = userIdOrThrow(req);
-      const call = this.calls.getCall(id);
+      const call = this.calls.getCallByIdOrCode(id);
       if (!this.calls.isParticipant(call, userId)) {
         throw new CallForbiddenError('Not a participant of this call');
       }
@@ -169,7 +173,7 @@ export class CallsController {
       }
       const creds = await this.turn.generateCredentials({
         userId,
-        callId: id,
+        callId: call.id,
       });
       return creds;
     } catch (err) {
@@ -182,14 +186,14 @@ export class CallsController {
   async sfuToken(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
       const userId = userIdOrThrow(req);
-      const call = this.calls.getCall(id);
+      const call = this.calls.getCallByIdOrCode(id);
       if (!this.calls.isParticipant(call, userId)) {
         throw new CallForbiddenError('Not a participant of this call');
       }
       if (call.status === 'ended') {
         throw new CallInvalidStateError('Call has ended');
       }
-      return await this.sfu.issueToken({ callId: id, userId });
+      return await this.sfu.issueToken({ callId: call.id, userId });
     } catch (err) {
       throw this.translateError(err);
     }
@@ -198,12 +202,12 @@ export class CallsController {
   @Get(':id/events')
   eventsFor(@Param('id') id: string, @Req() req: AuthedRequest) {
     try {
-      const call = this.calls.getCall(id);
+      const call = this.calls.getCallByIdOrCode(id);
       const userId = userIdOrThrow(req);
       if (!this.calls.isParticipant(call, userId)) {
         throw new CallForbiddenError('Not a participant of this call');
       }
-      return { events: this.events.forCall(id) };
+      return { events: this.events.forCall(call.id) };
     } catch (err) {
       throw this.translateError(err);
     }

@@ -130,6 +130,7 @@ export class CallsService {
       createdAt: now,
     };
     this.calls.set(id, call);
+    this.codeIndex.set(roomId, id);
     this.events.record(id, 'created', input.creatorId, { roomId, visibility });
 
     for (const invitee of input.invitees ?? []) {
@@ -143,6 +144,31 @@ export class CallsService {
     const call = this.calls.get(callId);
     if (!call) throw new CallNotFoundError(callId);
     return call;
+  }
+
+  /**
+   * Look up a call by its human-shareable room code (XXX-XXX-XXX). Used
+   * by the controller when the client sends the code from a URL like
+   * `/calls/YSU-3CG-2JK/turn-credentials`, since URLs only carry the
+   * code, not the internal UUID.
+   */
+  getCallByRoomCode(roomCode: string): Call {
+    const callId = this.codeIndex.get(roomCode);
+    if (!callId) throw new CallNotFoundError(roomCode);
+    const call = this.calls.get(callId);
+    if (!call) throw new CallNotFoundError(roomCode);
+    return call;
+  }
+
+  /**
+   * Resolve a call by either its internal UUID or its human-shareable
+   * room code. URLs and shareable links carry the code, while internal
+   * API flows and the signaling layer use the UUID.
+   */
+  getCallByIdOrCode(idOrCode: string): Call {
+    const byId = this.calls.get(idOrCode);
+    if (byId) return byId;
+    return this.getCallByRoomCode(idOrCode);
   }
 
   /**
@@ -169,7 +195,6 @@ export class CallsService {
     for (let attempt = 0; attempt < ROOM_CODE_MAX_ATTEMPTS; attempt += 1) {
       const code = generateRoomCode();
       if (!this.codeIndex.has(code)) {
-        this.codeIndex.set(code, '');
         return code;
       }
     }
