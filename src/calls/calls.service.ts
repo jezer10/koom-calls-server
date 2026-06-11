@@ -5,8 +5,29 @@ import {
   CallEvent,
   CallEventType,
   CallParticipant,
+  CallStatus,
+  CallVisibility,
   CreateCallInput,
 } from './call.types';
+
+const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_CODE_SEGMENT_LENGTH = 3;
+const ROOM_CODE_SEGMENTS = 3;
+const ROOM_CODE_MAX_ATTEMPTS = 16;
+
+export function generateRoomCode(): string {
+  const part = (): string => {
+    let out = '';
+    for (let i = 0; i < ROOM_CODE_SEGMENT_LENGTH; i += 1) {
+      const idx = Math.floor(Math.random() * ROOM_CODE_ALPHABET.length);
+      out += ROOM_CODE_ALPHABET[idx];
+    }
+    return out;
+  };
+  return Array.from({ length: ROOM_CODE_SEGMENTS }, part).join('-');
+}
+
+export type ListStatus = 'all' | CallStatus;
 
 @Injectable()
 export class CallEventsStore {
@@ -73,16 +94,25 @@ export class CallInvalidStateError extends Error {
   }
 }
 
+export class CallCodeCollisionError extends Error {
+  constructor() {
+    super('Could not generate a unique room code after several attempts');
+    this.name = 'CallCodeCollisionError';
+  }
+}
+
 @Injectable()
 export class CallsService {
   private readonly calls = new Map<string, Call>();
+  private readonly codeIndex = new Map<string, string>();
 
   constructor(private readonly events: CallEventsStore) {}
 
   createCall(input: CreateCallInput): Call {
     const id = randomUUID();
     const now = new Date().toISOString();
-    const roomId = input.roomId ?? `call-${id}`;
+    const roomId = this.reserveRoomCode();
+    const visibility: CallVisibility = input.visibility ?? 'link';
     const creator: CallParticipant = {
       userId: input.creatorId,
       role: 'creator',
@@ -94,12 +124,13 @@ export class CallsService {
       id,
       roomId,
       status: 'pending',
+      visibility,
       creatorId: input.creatorId,
       participants: [creator],
       createdAt: now,
     };
     this.calls.set(id, call);
-    this.events.record(id, 'created', input.creatorId, { roomId });
+    this.events.record(id, 'created', input.creatorId, { roomId, visibility });
 
     for (const invitee of input.invitees ?? []) {
       if (invitee === input.creatorId) continue;
@@ -112,6 +143,37 @@ export class CallsService {
     const call = this.calls.get(callId);
     if (!call) throw new CallNotFoundError(callId);
     return call;
+  }
+
+  /**
+   * Return calls the user participates in, sorted by `createdAt` desc.
+   * @param status 'all' returns every call; any other value matches the
+   *               call's status literally (pending, active, or ended).
+   */
+  listForUser(
+    userId: string,
+    options: { status?: ListStatus } = {},
+  ): Call[] {
+    const status = options.status ?? 'all';
+    const result: Call[] = [];
+    for (const call of this.calls.values()) {
+      if (!this.isParticipant(call, userId)) continue;
+      if (status !== 'all' && call.status !== status) continue;
+      result.push(call);
+    }
+    result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return result;
+  }
+
+  private reserveRoomCode(): string {
+    for (let attempt = 0; attempt < ROOM_CODE_MAX_ATTEMPTS; attempt += 1) {
+      const code = generateRoomCode();
+      if (!this.codeIndex.has(code)) {
+        this.codeIndex.set(code, '');
+        return code;
+      }
+    }
+    throw new CallCodeCollisionError();
   }
 
   invite(callId: string, inviterId: string, inviteeId: string): Call {
@@ -165,8 +227,31 @@ export class CallsService {
     if (call.status === 'ended') {
       throw new CallInvalidStateError('Call has ended');
     }
+    if (this.isParticipant(call, userId)) return call;
+    if (call.visibility === 'link') {
+      // Open calls: any authenticated user with the roomId may join.
+      // The creator is implicitly in control of who gets the link.
+      this.joinAsLinkParticipant(call, userId);
+      return call;
+    }
     this.requireParticipant(call, userId);
     return call;
+  }
+
+  private joinAsLinkParticipant(call: Call, userId: string): void {
+    const now = new Date().toISOString();
+    call.participants.push({
+      userId,
+      role: 'invitee',
+      status: 'joined',
+      invitedAt: now,
+      joinedAt: now,
+    });
+    if (call.status === 'pending') {
+      call.status = 'active';
+      call.startedAt = now;
+    }
+    this.events.record(call.id, 'joined', userId, { via: 'link' });
   }
 
   leave(callId: string, userId: string): Call {
@@ -189,6 +274,7 @@ export class CallsService {
     call.endedAt = new Date().toISOString();
     call.endedBy = userId;
     this.events.record(callId, 'ended', userId);
+    this.codeIndex.delete(call.roomId);
     return call;
   }
 
@@ -202,6 +288,7 @@ export class CallsService {
 
   reset(): void {
     this.calls.clear();
+    this.codeIndex.clear();
     this.events.clear();
   }
 

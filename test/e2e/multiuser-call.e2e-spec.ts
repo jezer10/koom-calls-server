@@ -57,6 +57,19 @@ interface EventsResponse {
   }>;
 }
 
+interface ListMineResponse {
+  calls: Array<{
+    id: string;
+    roomId: string;
+    status: 'pending' | 'active' | 'ended';
+    creatorId: string;
+    createdAt: string;
+    startedAt?: string;
+    endedAt?: string;
+    participantCount: number;
+  }>;
+}
+
 function authedRequest(app: INestApplication, token: string) {
   const server = app.getHttpServer() as unknown as Server & {
     address: () => AddressInfo;
@@ -224,15 +237,16 @@ describe('Multiuser call lifecycle (e2e)', () => {
     expect(endedEvent?.userId).toBe(TEST_USER_A);
   });
 
-  it('2. rejects a non-participant from joining the call', async () => {
+  it('2. rejects a non-participant from joining a private call', async () => {
     const alice = authedRequest(app, tokenA);
     const mallory = authedRequest(app, tokenC);
 
     const created = await alice
       .post('/calls')
-      .send({ invitees: [TEST_USER_B] })
+      .send({ visibility: 'private', invitees: [TEST_USER_B] })
       .expect(201);
     const call = created.body as CreateCallResponse;
+    expect(call.visibility).toBe('private');
 
     const malloryJoin = await mallory
       .post(`/calls/${call.id}/join`)
@@ -400,5 +414,158 @@ describe('Multiuser call lifecycle (e2e)', () => {
     const res = await mallory.post(`/calls/${call.id}/sfu-token`).expect(403);
     expect(bodyMessage(res.body)).toMatch(/not a participant/i);
     expect(boot.sfuService.calls.length).toBe(sfuCallsBefore);
+  });
+
+  it('8. POST /calls generates a server-side XXX-XXX-XXX roomId and ignores client hints', async () => {
+    const alice = authedRequest(app, tokenA);
+    const res = await alice
+      .post('/calls')
+      .send({ roomId: 'CLIENT-CHOSEN', invitees: [] })
+      .expect(201);
+    const call = res.body as CreateCallResponse;
+    expect(call.roomId).toMatch(/^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/);
+    expect(call.roomId).not.toBe('CLIENT-CHOSEN');
+    expect(call.id).not.toBe(call.roomId);
+  });
+
+  it('9. GET /calls/mine returns only the authenticated user\'s calls', async () => {
+    const alice = authedRequest(app, tokenA);
+    const bob = authedRequest(app, tokenB);
+    const mallory = authedRequest(app, tokenC);
+
+    // Alice creates two calls (one of which she invites Bob to).
+    const a1 = await alice
+      .post('/calls')
+      .send({ invitees: [TEST_USER_B] })
+      .expect(201);
+    const a1Call = a1.body as CreateCallResponse;
+    const a2 = await alice.post('/calls').send({}).expect(201);
+    const a2Call = a2.body as CreateCallResponse;
+
+    // Bob creates one of his own (without inviting Mallory).
+    const b1 = await bob.post('/calls').send({}).expect(201);
+    const b1Call = b1.body as CreateCallResponse;
+
+    // Alice's listing: both of her calls.
+    const aliceMine = await alice.get('/calls/mine').expect(200);
+    const aliceBody = aliceMine.body as ListMineResponse;
+    const aliceIds = aliceBody.calls.map((c) => c.id);
+    expect(aliceIds.sort()).toEqual([a1Call.id, a2Call.id].sort());
+    for (const c of aliceBody.calls) {
+      expect(c.creatorId).toBe(TEST_USER_A);
+      expect(c.participantCount).toBeGreaterThanOrEqual(1);
+      expect(c.roomId).toMatch(/^[A-HJ-NP-Z2-9]{3}-/);
+    }
+
+    // Bob's listing: his own call (he was a participant, not creator).
+    const bobMine = await bob.get('/calls/mine').expect(200);
+    const bobBody = bobMine.body as ListMineResponse;
+    const bobIds = bobBody.calls.map((c) => c.id);
+    expect(bobIds).toContain(a1Call.id); // invited by Alice
+    expect(bobIds).toContain(b1Call.id); // creator
+    expect(bobIds).not.toContain(a2Call.id); // not involved
+
+    // Mallory's listing: empty (no participation).
+    const malloryMine = await mallory.get('/calls/mine').expect(200);
+    expect((malloryMine.body as ListMineResponse).calls).toEqual([]);
+
+    // Clean up: end the alice calls so they don't pollute subsequent tests.
+    await alice.post(`/calls/${a1Call.id}/end`).expect(200);
+    await alice.post(`/calls/${a2Call.id}/end`).expect(200);
+    await bob.post(`/calls/${b1Call.id}/end`).expect(200);
+  });
+
+  it('10. GET /calls/mine?status=ended returns only ended calls', async () => {
+    const alice = authedRequest(app, tokenA);
+
+    const live = await alice.post('/calls').send({}).expect(201);
+    const liveCall = live.body as CreateCallResponse;
+    const toEnd = await alice.post('/calls').send({}).expect(201);
+    const toEndCall = toEnd.body as CreateCallResponse;
+    await alice.post(`/calls/${toEndCall.id}/end`).expect(200);
+
+    const all = await alice.get('/calls/mine').expect(200);
+    const allIds = (all.body as ListMineResponse).calls.map((c) => c.id);
+    expect(allIds.sort()).toEqual([liveCall.id, toEndCall.id].sort());
+
+    const ended = await alice.get('/calls/mine?status=ended').expect(200);
+    const endedIds = (ended.body as ListMineResponse).calls.map((c) => c.id);
+    expect(endedIds).toEqual([toEndCall.id]);
+
+    const pending = await alice.get('/calls/mine?status=pending').expect(200);
+    const pendingIds = (pending.body as ListMineResponse).calls.map((c) => c.id);
+    expect(pendingIds).toEqual([liveCall.id]);
+
+    // Clean up
+    await alice.post(`/calls/${liveCall.id}/end`).expect(200);
+  });
+
+  it('11. GET /calls/mine rejects an invalid status filter with 400', async () => {
+    const alice = authedRequest(app, tokenA);
+    const res = await alice.get('/calls/mine?status=bogus').expect(400);
+    expect(bodyMessage(res.body)).toMatch(/status/);
+  });
+
+  it('12. POST /calls defaults visibility to "link" and lets any authed user join', async () => {
+    const alice = authedRequest(app, tokenA);
+    const bob = authedRequest(app, tokenB);
+    const mallory = authedRequest(app, tokenC);
+
+    const created = await alice.post('/calls').send({}).expect(201);
+    const call = created.body as CreateCallResponse;
+    expect(call.visibility).toBe('link');
+
+    // Bob was never invited but can join because the call is open.
+    const bobJoin = await bob.post(`/calls/${call.id}/join`).expect(200);
+    const bobBody = bobJoin.body as CreateCallResponse;
+    expect(bobBody.participants.find((p) => p.userId === TEST_USER_B)).toMatchObject({
+      role: 'invitee',
+      status: 'joined',
+    });
+
+    // Mallory too.
+    const malloryJoin = await mallory.post(`/calls/${call.id}/join`).expect(200);
+    expect(
+      (malloryJoin.body as CreateCallResponse).participants.find(
+        (p) => p.userId === TEST_USER_C,
+      ),
+    ).toMatchObject({ role: 'invitee', status: 'joined' });
+
+    // Clean up.
+    await alice.post(`/calls/${call.id}/end`).expect(200);
+  });
+
+  it('13. POST /calls with visibility "private" only admits invited users', async () => {
+    const alice = authedRequest(app, tokenA);
+    const bob = authedRequest(app, tokenB);
+    const mallory = authedRequest(app, tokenC);
+
+    const created = await alice
+      .post('/calls')
+      .send({ visibility: 'private', invitees: [TEST_USER_B] })
+      .expect(201);
+    const call = created.body as CreateCallResponse;
+    expect(call.visibility).toBe('private');
+
+    // Bob was invited — joining works.
+    await bob.post(`/calls/${call.id}/join`).expect(200);
+
+    // Mallory was not invited — joining is rejected with 403.
+    const malloryJoin = await mallory
+      .post(`/calls/${call.id}/join`)
+      .expect(403);
+    expect(bodyMessage(malloryJoin.body)).toMatch(/not a participant/i);
+
+    // Clean up.
+    await alice.post(`/calls/${call.id}/end`).expect(200);
+  });
+
+  it('14. POST /calls rejects an invalid visibility value with 400', async () => {
+    const alice = authedRequest(app, tokenA);
+    const res = await alice
+      .post('/calls')
+      .send({ visibility: 'bogus' })
+      .expect(400);
+    expect(bodyMessage(res.body)).toMatch(/visibility/);
   });
 });

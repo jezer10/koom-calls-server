@@ -106,6 +106,20 @@ export function buildEnvSchema(
       PRESENCE_TTL_SECONDS: numberFromString(60),
       LOG_LEVEL: z.string().default('debug'),
       NODE_ENV: nodeEnvField,
+      GOOGLE_CLIENT_ID: z.string().default(''),
+      AUTH_ANONYMOUS_LOGIN_ENABLED: z
+        .preprocess((value: unknown) => {
+          if (value === undefined || value === null || value === '')
+            return undefined;
+          if (typeof value === 'boolean') return value;
+          if (typeof value === 'string') {
+            const v = value.toLowerCase();
+            if (v === 'true' || v === '1' || v === 'yes') return true;
+            if (v === 'false' || v === '0' || v === 'no') return false;
+          }
+          return undefined;
+        }, z.boolean())
+        .default(detectedEnv === 'production' ? false : true),
     })
     .superRefine((data, ctx) => {
       if (data.NODE_ENV !== 'production') return;
@@ -121,6 +135,22 @@ export function buildEnvSchema(
           code: 'custom',
           path: ['TURN_SHARED_SECRET'],
           message: 'TURN_SHARED_SECRET is required in production',
+        });
+      }
+      if (!data.GOOGLE_CLIENT_ID) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['GOOGLE_CLIENT_ID'],
+          message:
+            'GOOGLE_CLIENT_ID is required in production (configure Google OAuth client)',
+        });
+      }
+      if (data.CORS_ORIGIN === '*') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['CORS_ORIGIN'],
+          message:
+            'CORS_ORIGIN must not be "*" in production (set the front-end origin explicitly)',
         });
       }
     })
@@ -157,6 +187,11 @@ export type ParsedEnv = {
   PRESENCE_TTL_SECONDS: number;
   LOG_LEVEL: string;
   NODE_ENV: NodeEnv;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  GOOGLE_REDIRECT_URI: string;
+  FRONTEND_ORIGIN: string;
+  AUTH_ANONYMOUS_LOGIN_ENABLED: boolean;
 };
 
 export interface ParseEnvOptions extends EnvSchemaOptions {
@@ -227,7 +262,12 @@ function pickParsed(raw: Record<string, unknown>): ParsedEnv {
     RATE_LIMIT_IP_BURST: raw['RATE_LIMIT_IP_BURST'] as number,
     SFU_TOKEN_TTL_SECONDS: raw['SFU_TOKEN_TTL_SECONDS'] as number,
     PRESENCE_TTL_SECONDS: raw['PRESENCE_TTL_SECONDS'] as number,
-    LOG_LEVEL: raw['LOG_LEVEL'] as string,
-    NODE_ENV: raw['NODE_ENV'] as NodeEnv,
-  };
-}
+      LOG_LEVEL: raw['LOG_LEVEL'] as string,
+      NODE_ENV: raw['NODE_ENV'] as NodeEnv,
+      GOOGLE_CLIENT_ID: raw['GOOGLE_CLIENT_ID'] as string,
+      GOOGLE_CLIENT_SECRET: raw['GOOGLE_CLIENT_SECRET'] as string,
+      GOOGLE_REDIRECT_URI: raw['GOOGLE_REDIRECT_URI'] as string,
+      FRONTEND_ORIGIN: raw['FRONTEND_ORIGIN'] as string,
+      AUTH_ANONYMOUS_LOGIN_ENABLED: raw['AUTH_ANONYMOUS_LOGIN_ENABLED'] as boolean,
+    };
+  }

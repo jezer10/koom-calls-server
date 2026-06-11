@@ -87,6 +87,11 @@ describe('buildAppConfig', () => {
       TURN_URL: 'turn:turn.example.com:3478',
       TURN_SHARED_SECRET: 'turn-secret',
       TURN_TTL: '600',
+      GOOGLE_CLIENT_ID: 'prod.apps.googleusercontent.com',
+      GOOGLE_CLIENT_SECRET: 'prod-secret',
+      GOOGLE_REDIRECT_URI: 'https://app.example.com/auth/google/callback',
+      FRONTEND_ORIGIN: 'https://app.example.com',
+      CORS_ORIGIN: 'https://app.example.com',
       NODE_ENV: 'production',
     };
 

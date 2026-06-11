@@ -1,6 +1,8 @@
+import type { CallVisibility } from './call.types';
+
 export interface CreateCallDto {
-  roomId?: string;
   invitees?: string[];
+  visibility?: CallVisibility;
 }
 
 export interface InviteCallDto {
@@ -14,12 +16,6 @@ export function parseCreateCallDto(body: unknown): CreateCallDto {
   }
   const raw = body as Record<string, unknown>;
   const dto: CreateCallDto = {};
-  if (raw.roomId !== undefined) {
-    if (typeof raw.roomId !== 'string' || raw.roomId.length === 0) {
-      throw new Error('roomId must be a non-empty string');
-    }
-    dto.roomId = raw.roomId;
-  }
   if (raw.invitees !== undefined) {
     if (!Array.isArray(raw.invitees)) {
       throw new Error('invitees must be an array of userIds');
@@ -30,6 +26,12 @@ export function parseCreateCallDto(body: unknown): CreateCallDto {
       }
     }
     dto.invitees = raw.invitees as string[];
+  }
+  if (raw.visibility !== undefined) {
+    if (raw.visibility !== 'private' && raw.visibility !== 'link') {
+      throw new Error("visibility must be either 'private' or 'link'");
+    }
+    dto.visibility = raw.visibility;
   }
   return dto;
 }

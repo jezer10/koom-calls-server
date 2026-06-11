@@ -1,5 +1,7 @@
 export type CallStatus = 'pending' | 'active' | 'ended';
 
+export type CallVisibility = 'private' | 'link';
+
 export type ParticipantRole = 'creator' | 'invitee';
 
 export type ParticipantStatus = 'invited' | 'joined' | 'left' | 'declined';
@@ -17,6 +19,7 @@ export interface Call {
   id: string;
   roomId: string;
   status: CallStatus;
+  visibility: CallVisibility;
   creatorId: string;
   participants: CallParticipant[];
   createdAt: string;
@@ -29,6 +32,7 @@ export interface CreateCallInput {
   creatorId: string;
   roomId?: string;
   invitees?: string[];
+  visibility?: CallVisibility;
 }
 
 export type CallEventType =

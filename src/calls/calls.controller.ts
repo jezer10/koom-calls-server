@@ -10,7 +10,9 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   Req,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -21,12 +23,14 @@ import type { TurnService } from '../turn/turn.types';
 import { SFU_SERVICE } from '../sfu/sfu.types';
 import type { SfuService } from '../sfu/sfu.types';
 import {
+  CallCodeCollisionError,
   CallConflictError,
   CallForbiddenError,
   CallInvalidStateError,
   CallNotFoundError,
   CallEventsStore,
   CallsService,
+  ListStatus,
 } from './calls.service';
 import { parseCreateCallDto, parseInviteCallDto } from './dto';
 
@@ -39,6 +43,16 @@ function userIdOrThrow(req: AuthedRequest): string {
     throw new ForbiddenException('Authenticated user required');
   }
   return req.user.userId;
+}
+
+function parseListStatus(raw: unknown): ListStatus {
+  if (raw === undefined || raw === null || raw === '') return 'all';
+  if (raw === 'all' || raw === 'pending' || raw === 'active' || raw === 'ended') {
+    return raw;
+  }
+  throw new BadRequestException(
+    "status must be one of: 'all', 'pending', 'active', 'ended'",
+  );
 }
 
 @Controller('calls')
@@ -58,10 +72,22 @@ export class CallsController {
       const dto = parseCreateCallDto(body);
       const call = this.calls.createCall({
         creatorId: userIdOrThrow(req),
-        roomId: dto.roomId,
         invitees: dto.invitees,
+        visibility: dto.visibility,
       });
       return this.toResponse(call);
+    } catch (err) {
+      throw this.translateError(err);
+    }
+  }
+
+  @Get('mine')
+  listMine(@Query('status') statusRaw: unknown, @Req() req: AuthedRequest) {
+    try {
+      const status = parseListStatus(statusRaw);
+      const userId = userIdOrThrow(req);
+      const calls = this.calls.listForUser(userId, { status });
+      return { calls: calls.map((c) => this.toListItem(c)) };
     } catch (err) {
       throw this.translateError(err);
     }
@@ -188,12 +214,27 @@ export class CallsController {
       id: call.id,
       roomId: call.roomId,
       status: call.status,
+      visibility: call.visibility,
       creatorId: call.creatorId,
       participants: call.participants,
       createdAt: call.createdAt,
       startedAt: call.startedAt,
       endedAt: call.endedAt,
       endedBy: call.endedBy,
+    };
+  }
+
+  private toListItem(call: ReturnType<CallsService['getCall']>) {
+    return {
+      id: call.id,
+      roomId: call.roomId,
+      status: call.status,
+      visibility: call.visibility,
+      creatorId: call.creatorId,
+      createdAt: call.createdAt,
+      startedAt: call.startedAt,
+      endedAt: call.endedAt,
+      participantCount: call.participants.length,
     };
   }
 
@@ -209,6 +250,9 @@ export class CallsController {
     }
     if (err instanceof CallInvalidStateError) {
       return new ConflictException(err.message);
+    }
+    if (err instanceof CallCodeCollisionError) {
+      return new ServiceUnavailableException(err.message);
     }
     if (err instanceof Error) {
       return new BadRequestException(err.message);

@@ -25,6 +25,8 @@ describe('bootstrap()', () => {
       get: jest.fn().mockReturnValue(fakeConfigService),
       useWebSocketAdapter: jest.fn(),
       enableCors: jest.fn(),
+      use: jest.fn(),
+      setGlobalPrefix: jest.fn(),
     };
     createSpy = jest
       .spyOn(NestFactory, 'create')

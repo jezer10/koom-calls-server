@@ -67,4 +67,68 @@ describe('UsersRepository', () => {
     const found = await repo.findByEmail('nope@x.com');
     expect(found).toBeNull();
   });
+
+  it('create accepts missing email (nullable column)', async () => {
+    const u = await repo.create({ displayName: 'NoEmail' });
+    expect(u.email).toBeNull();
+    expect(u.provider).toBe('dev');
+    expect(u.providerSub).toBe(u.id);
+  });
+
+  describe('upsertByProvider', () => {
+    it('creates a new user when (provider, providerSub) does not exist', async () => {
+      const u = await repo.upsertByProvider({
+        provider: 'google',
+        providerSub: 'goog-1',
+        email: 'g@x.com',
+        emailVerified: true,
+        displayName: 'G',
+        picture: 'http://x/p.png',
+      });
+      expect(u.provider).toBe('google');
+      expect(u.providerSub).toBe('goog-1');
+      expect(u.email).toBe('g@x.com');
+      expect(u.picture).toBe('http://x/p.png');
+      expect(u.lastLoginAt).toBeInstanceOf(Date);
+    });
+
+    it('updates an existing user when (provider, providerSub) matches', async () => {
+      const first = await repo.upsertByProvider({
+        provider: 'google',
+        providerSub: 'goog-2',
+        email: 'g2@x.com',
+        emailVerified: true,
+        displayName: 'G2-old',
+        picture: null,
+      });
+      const firstLogin = first.lastLoginAt;
+      await new Promise((r) => setTimeout(r, 5));
+      const second = await repo.upsertByProvider({
+        provider: 'google',
+        providerSub: 'goog-2',
+        email: 'g2@x.com',
+        emailVerified: true,
+        displayName: 'G2-new',
+        picture: 'http://x/p2.png',
+      });
+      expect(second.id).toBe(first.id);
+      expect(second.displayName).toBe('G2-new');
+      expect(second.picture).toBe('http://x/p2.png');
+      expect(second.lastLoginAt!.getTime()).toBeGreaterThan(
+        firstLogin!.getTime(),
+      );
+    });
+
+    it('handles null email from providers that do not expose one', async () => {
+      const u = await repo.upsertByProvider({
+        provider: 'google',
+        providerSub: 'goog-3',
+        email: null,
+        emailVerified: true,
+        displayName: 'Anon',
+        picture: null,
+      });
+      expect(u.email).toBeNull();
+    });
+  });
 });

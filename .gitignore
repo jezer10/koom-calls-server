@@ -6,6 +6,10 @@ coverage
 .env.*
 !.env.example
 !.env.example.docker
+credentials.json
+*.credentials.json
+service-account*.json
+gha-creds-*.json
 .DS_Store
 .vscode
 .idea

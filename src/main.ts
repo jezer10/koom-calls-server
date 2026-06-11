@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const cookieParser = require('cookie-parser');
 import { AppModule, SocketIoRedisAdapter } from './app.module';
 
 function parseCorsOrigin(
@@ -15,6 +17,22 @@ export async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create(AppModule, {
     cors: false,
+  });
+
+  app.use(cookieParser());
+
+  app.setGlobalPrefix('api', {
+    exclude: [
+      '/',
+      '/info',
+      '/info/(.*)',
+      '/metrics',
+      '/health',
+      // Google redirects to this URL verbatim (the configured
+      // GOOGLE_REDIRECT_URI). It must NOT be prefixed with /api or
+      // Google will throw a redirect_uri_mismatch on the next step.
+      '/auth/google/(.*)',
+    ],
   });
 
   const configService = app.get(ConfigService);
