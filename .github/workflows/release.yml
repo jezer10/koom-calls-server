@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  promote:
+    name: Promote develop → main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the tagged commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fast-forward main to the tagged commit
+        run: |
+          git fetch origin main
+          # main must be an ancestor of the tag (i.e. develop was fast-forwarded
+          # into main previously) so we can only move main forward.
+          if ! git merge-base --is-ancestor origin/main "${{ github.ref_name }}"; then
+            echo "::error::origin/main is not an ancestor of ${{ github.ref_name }}."
+            echo "::error::main can only be fast-forwarded; merge or rebase develop into main first."
+            exit 1
+          fi
+          git checkout -B main "${{ github.ref_name }}"
+          git push origin main
