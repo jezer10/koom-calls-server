@@ -15,7 +15,7 @@ function buildPayload(overrides: Partial<TokenPayload> = {}): TokenPayload {
     iat: now,
     exp: now + 600,
     ...overrides,
-  } as TokenPayload;
+  };
 }
 
 describe('GoogleService', () => {
@@ -29,7 +29,11 @@ describe('GoogleService', () => {
     verifyIdToken: jest.Mock;
   };
 
-  const buildService = (id: string | undefined, secret?: string, redirect?: string): GoogleService => {
+  const buildService = (
+    id: string | undefined,
+    secret?: string,
+    redirect?: string,
+  ): GoogleService => {
     const config = {
       get: (key: string) => {
         if (key === 'GOOGLE_CLIENT_ID') return id;
@@ -83,7 +87,9 @@ describe('GoogleService', () => {
 
   describe('buildAuthorizationUrl', () => {
     it('delegates to OAuth2Client.generateAuthUrl and returns its result', () => {
-      mockClient.generateAuthUrl.mockReturnValue('https://accounts.google.com/...');
+      mockClient.generateAuthUrl.mockReturnValue(
+        'https://accounts.google.com/...',
+      );
       const url = service.buildAuthorizationUrl('state-xyz');
       expect(mockClient.generateAuthUrl).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -91,6 +97,7 @@ describe('GoogleService', () => {
           access_type: 'online',
           prompt: 'select_account',
           redirect_uri: redirectUri,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           scope: expect.arrayContaining(['openid', 'email', 'profile']),
         }),
       );
@@ -130,24 +137,32 @@ describe('GoogleService', () => {
 
     it('rejects when getToken throws', async () => {
       mockClient.getToken.mockRejectedValue(new Error('bad code'));
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/code exchange/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /code exchange/,
+      );
     });
 
     it('rejects when id_token is missing from token response', async () => {
       mockClient.getToken.mockResolvedValue({ tokens: {} });
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/id_token/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /id_token/,
+      );
     });
 
     it('rejects when verifyIdToken throws (bad signature)', async () => {
       mockClient.getToken.mockResolvedValue({ tokens: { id_token: 'jwt' } });
       mockClient.verifyIdToken.mockRejectedValue(new Error('bad signature'));
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/bad signature/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /bad signature/,
+      );
     });
 
     it('rejects when payload is null', async () => {
       mockClient.getToken.mockResolvedValue({ tokens: { id_token: 'jwt' } });
       mockClient.verifyIdToken.mockResolvedValue({ getPayload: () => null });
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/no payload/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /no payload/,
+      );
     });
 
     it('rejects when issuer is invalid', async () => {
@@ -163,7 +178,9 @@ describe('GoogleService', () => {
       mockClient.verifyIdToken.mockResolvedValue({
         getPayload: () => buildPayload({ aud: 'other-client' }),
       });
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/audience/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /audience/,
+      );
     });
 
     it('rejects when sub is empty', async () => {
@@ -171,7 +188,9 @@ describe('GoogleService', () => {
       mockClient.verifyIdToken.mockResolvedValue({
         getPayload: () => buildPayload({ sub: '' }),
       });
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/subject/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /subject/,
+      );
     });
 
     it('rejects when email_verified is false', async () => {
@@ -179,7 +198,9 @@ describe('GoogleService', () => {
       mockClient.verifyIdToken.mockResolvedValue({
         getPayload: () => buildPayload({ email_verified: false }),
       });
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/not verified/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /not verified/,
+      );
     });
 
     it('rejects when token is expired', async () => {
@@ -188,7 +209,9 @@ describe('GoogleService', () => {
       mockClient.verifyIdToken.mockResolvedValue({
         getPayload: () => buildPayload({ exp: past }),
       });
-      await expect(service.exchangeAndVerify('code')).rejects.toThrow(/expired/);
+      await expect(service.exchangeAndVerify('code')).rejects.toThrow(
+        /expired/,
+      );
     });
   });
 });

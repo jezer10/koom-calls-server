@@ -4,13 +4,11 @@ import {
   Controller,
   Get,
   HttpCode,
-  Inject,
   NotFoundException,
   Post,
   Query,
   Req,
   Res,
-  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -18,7 +16,11 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AuthenticatedUser } from './authenticated-user';
-import { AuthService, type SignInResult, type WsTokenResult } from './auth.service';
+import {
+  AuthService,
+  type SignInResult,
+  type WsTokenResult,
+} from './auth.service';
 import { OAuthProvidersRegistry } from './providers/oauth-providers.registry';
 import { WsTokenService } from './ws/ws-token.service';
 
@@ -33,10 +35,6 @@ const COOKIE_PATH_OAUTH = '/auth/google';
 const COOKIE_PATH_SESSION = '/';
 const STATE_TTL_SECONDS = 600;
 const SESSION_TTL_SECONDS = 3600;
-
-const googleLoginDto = z.object({
-  idToken: z.string().min(1).max(8192),
-});
 
 const anonymousLoginDto = z.object({
   displayName: z.string().min(1).max(255).optional(),
@@ -103,7 +101,10 @@ function safeReturnTo(returnTo: string | undefined): string {
   return returnTo;
 }
 
-function popupHtml(payload: Record<string, unknown>, targetOrigin: string): string {
+function popupHtml(
+  payload: Record<string, unknown>,
+  targetOrigin: string,
+): string {
   const json = JSON.stringify(payload).replace(/</g, '\\u003c');
   return `<!doctype html><html><head><meta charset="utf-8"><title>Authenticating…</title></head><body><script>(function(){
     function done(){ try { window.close(); } catch (e) {} }
@@ -132,15 +133,12 @@ export class AuthController {
   @Get('providers')
   listProviders() {
     const providers = this.registry.list().filter((p) => p.enabled);
-    if (this.auth.isAnonymousLoginEnabled()) {
-      providers.push({
-        name: 'anonymous',
-        displayName: 'Guest',
-        configKey: 'AUTH_ANONYMOUS_LOGIN_ENABLED',
-        enabled: true,
-        startUrl: '/auth/anonymous/login',
-      });
-    }
+    providers.push({
+      name: 'anonymous',
+      displayName: 'Guest',
+      enabled: true,
+      startUrl: '/auth/anonymous/login',
+    });
     return { providers };
   }
 
@@ -171,8 +169,9 @@ export class AuthController {
     @Res() res: Response,
   ) {
     const frontendOrigin = this.auth.getFrontendOrigin() || '*';
-    const expectedState = req.cookies?.[STATE_COOKIE];
-    const returnTo = req.cookies?.[RETURNTO_COOKIE] ?? '';
+    const cookies = req.cookies as Record<string, string> | undefined;
+    const expectedState: string = cookies?.[STATE_COOKIE] ?? '';
+    const returnTo = cookies?.[RETURNTO_COOKIE] ?? '';
     clearOauthCookies(res);
 
     if (error) {
@@ -245,9 +244,6 @@ export class AuthController {
     @Body() body: unknown,
     @Res({ passthrough: true }) res: Response,
   ): Promise<Omit<SignInResult, 'token'>> {
-    if (!this.auth.isAnonymousLoginEnabled()) {
-      throw new NotFoundException('anonymous login is disabled');
-    }
     const dto = parseAnonymousDto(body);
     const userId = `anon-${randomShortId()}`;
     const displayName = dto.displayName ?? 'Guest';
@@ -282,16 +278,18 @@ export class AuthController {
     }
     return this.wsTokens.issue(req.user.userId);
   }
-
-  private _unused() { /* removed */ }
 }
 
 function randomState(): string {
   const bytes = new Uint8Array(32);
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.getRandomValues === 'function'
+  ) {
     crypto.getRandomValues(bytes);
   } else {
-    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    for (let i = 0; i < bytes.length; i++)
+      bytes[i] = Math.floor(Math.random() * 256);
   }
   return Buffer.from(bytes).toString('base64url');
 }

@@ -23,7 +23,7 @@ export interface MediaProviderEnv {
   apiSecret?: string;
 }
 
-function deriveHttpUrl(wsUrl: string | undefined): string | undefined {
+export function deriveHttpUrl(wsUrl: string | undefined): string | undefined {
   if (!wsUrl) return undefined;
   if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) return wsUrl;
   if (wsUrl.startsWith('ws://')) return `http://${wsUrl.slice('ws://'.length)}`;

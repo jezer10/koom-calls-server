@@ -43,7 +43,10 @@ function isSqlite(url: string): boolean {
         if (isSqlite(url)) {
           return {
             type: 'better-sqlite3' as const,
-            database: url === 'sqlite::memory:' ? ':memory:' : url.replace(/^sqlite:/, ''),
+            database:
+              url === 'sqlite::memory:'
+                ? ':memory:'
+                : url.replace(/^sqlite:/, ''),
             autoSave: false,
             entities: [UserEntity],
             synchronize: isDev,
@@ -54,7 +57,10 @@ function isSqlite(url: string): boolean {
           url,
           entities: [UserEntity],
           synchronize: isDev,
-          ssl: cfg.get<string>('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
+          ssl:
+            cfg.get<string>('NODE_ENV') === 'production'
+              ? { rejectUnauthorized: false }
+              : false,
         };
       },
     }),

@@ -29,8 +29,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (req: Request) => {
-          const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
+        (req: Request): string | null => {
+          const cookies: Record<string, string> | undefined = (
+            req as Request & { cookies?: Record<string, string> }
+          ).cookies;
           return cookies?.['koom_session'] ?? null;
         },
       ]),

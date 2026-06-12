@@ -29,9 +29,7 @@ import {
         signOptions: { expiresIn: '1h' },
       }),
     }),
-    ThrottlerModule.forRoot([
-      { name: 'default', ttl: 60_000, limit: 10 },
-    ]),
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 10 }]),
     TypeOrmModule.forFeature([UserEntity]),
   ],
   providers: [
@@ -54,6 +52,12 @@ import {
     },
   ],
   controllers: [AuthController],
-  exports: [JwtAuthGuard, JwtModule, PassportModule, AuthService, WsTokenService],
+  exports: [
+    JwtAuthGuard,
+    JwtModule,
+    PassportModule,
+    AuthService,
+    WsTokenService,
+  ],
 })
 export class AuthModule {}

@@ -47,7 +47,12 @@ function userIdOrThrow(req: AuthedRequest): string {
 
 function parseListStatus(raw: unknown): ListStatus {
   if (raw === undefined || raw === null || raw === '') return 'all';
-  if (raw === 'all' || raw === 'pending' || raw === 'active' || raw === 'ended') {
+  if (
+    raw === 'all' ||
+    raw === 'pending' ||
+    raw === 'active' ||
+    raw === 'ended'
+  ) {
     return raw;
   }
   throw new BadRequestException(
@@ -117,7 +122,11 @@ export class CallsController {
     try {
       const dto = parseInviteCallDto(body);
       const call = this.calls.getCallByIdOrCode(id);
-      const updated = this.calls.invite(call.id, userIdOrThrow(req), dto.inviteeId);
+      const updated = this.calls.invite(
+        call.id,
+        userIdOrThrow(req),
+        dto.inviteeId,
+      );
       return this.toResponse(updated);
     } catch (err) {
       throw this.translateError(err);

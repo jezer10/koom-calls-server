@@ -40,11 +40,18 @@ services:
     image: livekit/livekit-server:latest
     container_name: koom-livekit
     restart: unless-stopped
+    # `--dev` registers a well-known devkey/secret pair (see livekit logs)
+    # and disables the production 32-char secret-length check. The back's
+    # .env uses the same values so JWTs it signs validate against the
+    # server's in-memory key set. For production, switch to `--config
+    # /etc/livekit.yaml` with real credentials (and longer secret).
     command: --dev --bind 0.0.0.0
     ports:
       - '7880:7880'
       - '7881:7881/udp'
       - '7882:7882/udp'
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}

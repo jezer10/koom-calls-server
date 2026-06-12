@@ -176,10 +176,7 @@ export class CallsService {
    * @param status 'all' returns every call; any other value matches the
    *               call's status literally (pending, active, or ended).
    */
-  listForUser(
-    userId: string,
-    options: { status?: ListStatus } = {},
-  ): Call[] {
+  listForUser(userId: string, options: { status?: ListStatus } = {}): Call[] {
     const status = options.status ?? 'all';
     const result: Call[] = [];
     for (const call of this.calls.values()) {
