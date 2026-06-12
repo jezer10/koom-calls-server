@@ -46,7 +46,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=develop,enable={{branch == 'develop'}}
+            type=raw,value=develop,enable=${{ github.ref == format('refs/heads/{0}', 'develop') }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
