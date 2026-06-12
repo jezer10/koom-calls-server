@@ -11,6 +11,12 @@
 ```
 PR develop → main
         │
+        ├─── .github/workflows/ci.yml          (en cada push/PR)
+        │      · pnpm install --frozen-lockfile
+        │      · pnpm lint:check
+        │      · pnpm test  (jest, 428 specs)
+        │      · pnpm build (nest build)
+        │
         ▼
 .github/workflows/docker-publish.yml
   · build multi-arch (linux/amd64, linux/arm64)
@@ -155,6 +161,31 @@ docker logs --tail 100 koom-calls-server
 ```
 
 ## 8. Workflows
+
+### `.github/workflows/ci.yml`
+
+- Trigger: `pull_request` a `main`/`develop`, `push` a `main`/`develop`,
+  manual (`workflow_dispatch`).
+- `concurrency: ci-…-${{ pr.number || ref }}` con
+  `cancel-in-progress: ${{ event_name == 'pull_request' }}`.
+  Un force-push sobre la misma PR cancela el run anterior; los pushes a
+  `main`/`develop` no se cancelan entre sí (dejan terminar para audit).
+- Job `ci` (`ubuntu-latest`, `timeout-minutes: 15`):
+  1. `actions/checkout@v4`
+  2. `actions/setup-node@v4` con `node-version: 22` y `cache: pnpm`
+     (cachea el store de pnpm por hash de `pnpm-lock.yaml`).
+  3. `corepack enable` — garantiza la versión de pnpm declarada en
+     `packageManager` (`11.5.2`).
+  4. `pnpm install --frozen-lockfile` — falla si el lockfile está
+     desincronizado.
+  5. `pnpm lint:check` — eslint, falla en cualquier error.
+  6. `pnpm test` — jest.
+  7. `pnpm build` — `nest build` (type-check de TS).
+- Tiempo esperado de punta a punta: ~1 min cacheado, ~3 min en frío.
+- **Branch protection (acción manual):** en GitHub UI →
+  Settings → Branches → `main` y `develop` → Require status checks →
+  seleccionar `Lint, test, build` como required. Sin esto el check es
+  solo informativo y no bloquea merges rotos.
 
 ### `.github/workflows/docker-publish.yml`
 

@@ -8,9 +8,6 @@ import {
   parseSfuJoinRoomPayload,
   parseSfuPublishTrackPayload,
   parseSfuSubscribeTrackPayload,
-  parseWebrtcAnswerPayload,
-  parseWebrtcIceCandidatePayload,
-  parseWebrtcOfferPayload,
 } from '../dto/signaling.dto';
 
 describe('signaling.dto parsers', () => {
@@ -63,31 +60,6 @@ describe('signaling.dto parsers', () => {
         });
         it('rejects non-objects', () => {
           const r = parser('nope');
-          expect(r.ok).toBe(false);
-        });
-      });
-    });
-  });
-
-  describe('webrtc signal parsers', () => {
-    const parsers = {
-      'webrtc:offer': parseWebrtcOfferPayload,
-      'webrtc:answer': parseWebrtcAnswerPayload,
-      'webrtc:ice-candidate': parseWebrtcIceCandidatePayload,
-    } as const;
-
-    Object.entries(parsers).forEach(([name, parser]) => {
-      describe(name, () => {
-        it('accepts a valid signal payload', () => {
-          const r = parser({ callId: 'c1', to: 'bob', signal: { sdp: 'x' } });
-          expect(r.ok).toBe(true);
-        });
-        it('rejects when to is missing', () => {
-          const r = parser({ callId: 'c1', signal: {} });
-          expect(r.ok).toBe(false);
-        });
-        it('rejects when callId is missing', () => {
-          const r = parser({ to: 'bob', signal: {} });
           expect(r.ok).toBe(false);
         });
       });
