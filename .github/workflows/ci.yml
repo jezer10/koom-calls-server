@@ -3,16 +3,24 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   workflow_dispatch:
 
+# Cancela runs viejos solo en PRs (un force-push mata el run anterior);
+# los pushes a main/develop dejan terminar para mantener historia.
 concurrency:
-  # Cancel in-progress solo en PRs: un force-push cancela el run anterior
-  # de la misma PR. En push a main/develop dejamos que ambos runs terminen
-  # para no perder historia.
   group: ci-${{ github.event.repository.name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -21,8 +29,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node 22
         uses: actions/setup-node@v4

@@ -3,29 +3,35 @@ name: Deploy to VPS
 on:
   workflow_run:
     workflows: ["Publish Docker image"]
-    types:
-      - completed
-
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Image tag to deploy (e.g. latest, main-abc1234). Default: latest'
+        description: 'Image tag a desplegar (default: latest). Ej: main-abc1234, v1.0.0'
         required: false
         default: 'latest'
+      require_env:
+        description: 'Fallar si .env no existe en la VPS. false solo para primer deploy.'
+        required: false
+        default: 'true'
 
+# Evita que dos deploys peleen por el mismo contenedor.
 concurrency:
   group: deploy-${{ github.event.repository.name }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment: production
-
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
 
     steps:
       - name: Determine image tag
@@ -49,44 +55,27 @@ jobs:
             set -euo pipefail
             DEPLOY_DIR="${{ secrets.VPS_DEPLOY_DIR_BACK || '$HOME/koom-calls-server' }}"
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}"
+            # workflow_dispatch puede forzar require_env=false (primer deploy).
+            # workflow_run siempre lo requiere.
+            REQUIRE_ENV='${{ github.event_name == ''workflow_dispatch'' && github.event.inputs.require_env || ''true'' }}'
 
-            mkdir -p "$DEPLOY_DIR"
             cd "$DEPLOY_DIR"
 
-            if [ ! -f .env ]; then
-              echo "::error::Missing $DEPLOY_DIR/.env"
-              echo "::error::Create the env file (see .env.example.docker) before deploying."
+            if [ "$REQUIRE_ENV" = "true" ] && [ ! -f .env ]; then
+              echo "::error::Falta $DEPLOY_DIR/.env en la VPS. Copiá back/.env.example.docker y editá, o re-ejecutá este workflow con require_env=false."
               exit 1
             fi
 
-            echo "::group::Logging in to GHCR"
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            echo "::endgroup::"
-
-            echo "::group::Pulling $IMAGE"
             docker pull "$IMAGE"
-            echo "::endgroup::"
-
-            echo "::group::Stopping previous container (if any)"
             docker rm -f koom-calls-server || true
-            echo "::endgroup::"
-
-            echo "::group::Ensuring koom-net network"
             docker network inspect koom-net >/dev/null 2>&1 || docker network create koom-net
-            echo "::endgroup::"
 
-            echo "::group::Starting new container"
-            docker run -d \
-              --name koom-calls-server \
-              --restart unless-stopped \
-              --network koom-net \
-              -p 8080:8080 \
-              --env-file .env \
-              "$IMAGE"
-            echo "::endgroup::"
+            RUN_ARGS=(-d --name koom-calls-server --restart unless-stopped --network koom-net -p 8080:8080)
+            if [ -f .env ]; then RUN_ARGS+=(--env-file .env); fi
+            docker run "${RUN_ARGS[@]}" "$IMAGE"
 
-            echo "::group::Waiting for health check"
-            for i in $(seq 1 30); do
+            for i in $(seq 1 20); do
               if curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
                 echo "Backend healthy after ${i}s"
                 break
@@ -94,10 +83,9 @@ jobs:
               sleep 1
             done
             if ! curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
-              echo "::error::Backend did not become healthy within 30s"
+              echo "::error::Backend unhealthy after 20s"
               docker logs --tail 50 koom-calls-server || true
               exit 1
             fi
-            echo "::endgroup::"
 
             echo "Deploy completed: $(docker inspect --format '{{.Image}}' koom-calls-server)"

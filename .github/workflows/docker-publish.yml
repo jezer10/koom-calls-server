@@ -2,12 +2,18 @@ name: Publish Docker image
 
 on:
   push:
-    branches:
-      - main
-      - develop
-    tags:
-      - 'v*'
+    branches: [main]
   workflow_dispatch:
+
+# Evita doble publish si en pocos segundos se pushea a main y se dispara
+# un manual con el mismo commit.
+concurrency:
+  group: publish-${{ github.event.repository.name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -16,9 +22,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
@@ -41,12 +44,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=develop,enable=${{ github.ref == format('refs/heads/{0}', 'develop') }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -56,5 +55,5 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          cache-to: type=gha,mode=min
+          platforms: linux/amd64
