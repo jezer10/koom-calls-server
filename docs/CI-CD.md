@@ -74,7 +74,7 @@ el exterior:
 
 | Servicio | Puerto host | Protocolo | Origen permitido | Por qué |
 |---|---|---|---|---|
-| `api` | `8080` | TCP | el front (vía dominio público) | HTTP + WebSocket signaling |
+| `api` | `8080` | TCP | el front (vía NPM) | HTTP + WebSocket signaling |
 | `coturn` | `3478` | UDP | `0.0.0.0/0` | TURN server: los clientes WebRTC lo contactan para atravesar NAT |
 | `coturn` | `3478` | TCP | `0.0.0.0/0` | TURN over TCP (fallback en redes restrictivas) |
 | `coturn` | `5349` | TCP | `0.0.0.0/0` | TURN over TLS (DTLS) |
@@ -83,11 +83,30 @@ el exterior:
 **No se publican al host** (viven en `internal`):
 `postgres:5432`, `redis:6379`, `livekit:7880` (plano de control), `livekit:7881-7882/udp` (plano de medios). El `api` los resuelve por nombre DNS dentro del compose.
 
-**Si el back va detrás de un reverse proxy (Caddy/Traefik/nginx)** que
-termina TLS en :443, abrí `443/tcp` y dejá el `8080` solo en
-`127.0.0.1` (bind en `0.0.0.0:8080` solo si no hay proxy). `coturn`
-necesita los UDP públicos sí o sí — no se puede meter detrás de un
-reverse proxy TCP/HTTP.
+### 3.2. Reverse proxy vía Nginx Proxy Manager (mismo VPS)
+
+Si NPM corre en **el mismo VPS** que este stack, el `api` está conectado
+a la red `npm-proxy` y NPM lo alcanza por nombre de contenedor
+(`koom-calls-server:8080`). Configurar un Proxy Host en NPM:
+
+| Campo en NPM | Valor |
+|---|---|
+| Domain Names | `api.tu-dominio.com` |
+| Scheme | `http` |
+| Forward Hostname / IP | `koom-calls-server` (nombre del contenedor) |
+| Forward Port | `8080` |
+| Websockets Support | **ON** (LiveKit signaling + Socket.IO) |
+| Cache Assets | OFF |
+| Force SSL | ON (NEM pide cert Let's Encrypt desde la UI) |
+| HSTS | ON |
+
+El `8080/tcp` queda en `0.0.0.0` para que (a) NPM lo alcance por
+nombre dentro de `npm-proxy`, y (b) vos puedas hacer
+`curl http://localhost:8080/health` desde el host para debug.
+
+**`coturn` no entra en NPM** — TURN usa UDP, ningún reverse proxy HTTP
+lo soporta. Sus puertos siguen publicándose al host directo y deben
+estar abiertos en el firewall del VPS.
 
 | Variable | Requerida prod | Default dev | Notas |
 |---|---|---|---|

@@ -1,11 +1,18 @@
 name: koom-dev
 
-# Surface mínima: solo el `api` (8080) y `coturn` (rango UDP) publican al host.
-# El resto vive en la red `internal` del compose, sin acceso a internet ni
-# al host. Ver docs/CI-CD.md §3 para el detalle de firewall en prod.
+# Surface mínima:
+# - `api` (8080) y `coturn` (rango UDP) publican al host.
+# - `api` también está en la red `npm-proxy` para que Nginx Proxy Manager
+#   (corriendo en este mismo VPS) pueda hacer reverse-proxy hacia
+#   `koom-calls-server:8080` por nombre de contenedor.
+# - El resto vive en la red `internal` del compose, sin acceso a internet
+#   ni al host. Ver docs/CI-CD.md §3 para el detalle de firewall.
 networks:
   internal:
     internal: true   # sin gateway → los servicios no pueden salir a internet
+  npm-proxy:
+    external: true   # la crea Nginx Proxy Manager al instalarse
+    name: npm-proxy
 
 services:
   postgres:
@@ -42,11 +49,14 @@ services:
   api:
     build: { context: ., dockerfile: Dockerfile }
     # Único entrypoint HTTP hacia el front.
+    # - 8080 se publica al host para healthcheck vía SSH (curl localhost:8080/health).
+    # - 8080 también es alcanzable desde el contenedor de NPM por estar en
+    #   la red `npm-proxy` (NPM hace forward a `koom-calls-server:8080`).
     ports: ['8080:8080']
     environment: { NODE_ENV: production }
     env_file: .env
     depends_on: [postgres, redis, livekit]
-    networks: [internal]
+    networks: [internal, npm-proxy]
 
 volumes:
   postgres-data:
