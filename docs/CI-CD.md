@@ -65,6 +65,30 @@ openssl rand -base64 48   # → TURN_SHARED_SECRET (debe coincidir con coturn)
 openssl rand -base64 32   # → password de Postgres
 ```
 
+### 3.1. Puertos publicados al host (qué abrir en el firewall)
+
+`docker-compose.yml` solo publica dos servicios al host; el resto vive
+en la red `internal` del compose (sin gateway, sin acceso al host ni a
+internet). El `api` y `coturn` son los únicos puntos de contacto con
+el exterior:
+
+| Servicio | Puerto host | Protocolo | Origen permitido | Por qué |
+|---|---|---|---|---|
+| `api` | `8080` | TCP | el front (vía dominio público) | HTTP + WebSocket signaling |
+| `coturn` | `3478` | UDP | `0.0.0.0/0` | TURN server: los clientes WebRTC lo contactan para atravesar NAT |
+| `coturn` | `3478` | TCP | `0.0.0.0/0` | TURN over TCP (fallback en redes restrictivas) |
+| `coturn` | `5349` | TCP | `0.0.0.0/0` | TURN over TLS (DTLS) |
+| `coturn` | `49152-49252` | UDP | `0.0.0.0/0` | Rango de relay de medios (mismo `--min-port`/`--max-port` del compose) |
+
+**No se publican al host** (viven en `internal`):
+`postgres:5432`, `redis:6379`, `livekit:7880` (plano de control), `livekit:7881-7882/udp` (plano de medios). El `api` los resuelve por nombre DNS dentro del compose.
+
+**Si el back va detrás de un reverse proxy (Caddy/Traefik/nginx)** que
+termina TLS en :443, abrí `443/tcp` y dejá el `8080` solo en
+`127.0.0.1` (bind en `0.0.0.0:8080` solo si no hay proxy). `coturn`
+necesita los UDP públicos sí o sí — no se puede meter detrás de un
+reverse proxy TCP/HTTP.
+
 | Variable | Requerida prod | Default dev | Notas |
 |---|---|---|---|
 | `NODE_ENV` | sí (production) | development | activa validaciones estrictas |
