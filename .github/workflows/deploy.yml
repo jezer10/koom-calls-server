@@ -83,12 +83,10 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             docker pull "$IMAGE"
             docker rm -f koom-calls-server || true
-            docker network inspect koom-net >/dev/null 2>&1 || docker network create koom-net
 
             docker run -d \
               --name koom-calls-server \
               --restart unless-stopped \
-              --network koom-net \
               -p 8080:8080 \
               --env-file .env \
               "$IMAGE"
