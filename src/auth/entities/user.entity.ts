@@ -17,8 +17,8 @@ export class UserEntity {
 
   @Column({
     name: 'created_at',
-    type: 'datetime',
-    default: () => "datetime('now')",
+    type: Date,
+    default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt!: Date;
 
@@ -31,6 +31,6 @@ export class UserEntity {
   @Column({ name: 'picture', type: 'varchar', length: 512, nullable: true })
   picture!: string | null;
 
-  @Column({ name: 'last_login_at', type: 'datetime', nullable: true })
+  @Column({ name: 'last_login_at', type: Date, nullable: true })
   lastLoginAt!: Date | null;
 }

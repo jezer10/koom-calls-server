@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UserEntity } from './auth/entities/user.entity';
+import { Init1781655355076 } from './persistence/migrations/1781655355076-init';
 import { CallsModule } from './calls/calls.module';
 import { SignalingModule } from './signaling/signaling.module';
 import { PresenceModule } from './presence/presence.module';
@@ -56,11 +57,12 @@ function isSqlite(url: string): boolean {
           type: 'postgres' as const,
           url,
           entities: [UserEntity],
-          synchronize: isDev,
-          ssl:
-            cfg.get<string>('NODE_ENV') === 'production'
-              ? { rejectUnauthorized: false }
-              : false,
+          migrations: [Init1781655355076],
+          synchronize: false,
+          migrationsRun: true,
+          ssl: cfg.get<boolean>('DATABASE_SSL')
+            ? { rejectUnauthorized: false }
+            : false,
         };
       },
     }),
