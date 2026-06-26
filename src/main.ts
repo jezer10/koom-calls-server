@@ -49,8 +49,12 @@ export async function bootstrap(): Promise<void> {
 
   await app.listen(config.httpPort);
 
-  logger.log(`Signaling server listening on http://localhost:${config.httpPort}`);
-  logger.log(`Socket.IO signaling: ${config.signaling.namespace} (path /socket.io)`);
+  logger.log(
+    `Signaling server listening on http://localhost:${config.httpPort}`,
+  );
+  logger.log(
+    `Socket.IO signaling: ${config.signaling.namespace} (path /socket.io)`,
+  );
 }
 
 if (require.main === module) {

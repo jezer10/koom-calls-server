@@ -83,7 +83,8 @@ export function deriveHttpUrl(wsUrl: string | undefined): string {
   if (!wsUrl) return '';
   if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) return wsUrl;
   if (wsUrl.startsWith('ws://')) return `http://${wsUrl.slice('ws://'.length)}`;
-  if (wsUrl.startsWith('wss://')) return `https://${wsUrl.slice('wss://'.length)}`;
+  if (wsUrl.startsWith('wss://'))
+    return `https://${wsUrl.slice('wss://'.length)}`;
   return wsUrl;
 }
 
@@ -131,7 +132,9 @@ export function buildAppConfig(
       sharedSecret: parsed.TURN_SHARED_SECRET,
       ttlSeconds: parsed.TURN_TTL,
       realm: env['TURN_REALM'] ?? 'koom.local',
-      stunUrls: parseList(env['TURN_STUN_URLS'], ['stun:stun.l.google.com:19302']),
+      stunUrls: parseList(env['TURN_STUN_URLS'], [
+        'stun:stun.l.google.com:19302',
+      ]),
       urls: parseList(parsed.TURN_URLS || '', [
         'turn:turn.koom.example.com:3478?transport=udp',
         'turn:turn.koom.example.com:3478?transport=tcp',

@@ -28,10 +28,14 @@ export class StaticSfuService implements SfuService {
     const issuedAt = Math.floor(Date.now() / 1000);
     const expiresAt = issuedAt + this.ttlSeconds;
     const roomId = this.deriveRoomId(req.callId);
-    const token = createLiveKitAccessToken(this.livekit.apiKey, this.livekit.apiSecret, {
-      identity: req.userId,
-      ttlSeconds: this.ttlSeconds,
-    });
+    const token = createLiveKitAccessToken(
+      this.livekit.apiKey,
+      this.livekit.apiSecret,
+      {
+        identity: req.userId,
+        ttlSeconds: this.ttlSeconds,
+      },
+    );
     token.addGrant(this.buildParticipantGrant(roomId));
     const jwt = await token.toJwt();
     this.logger.debug(

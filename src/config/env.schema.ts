@@ -23,7 +23,8 @@ const booleanFromString = (fallback: boolean) =>
     if (typeof value === 'boolean') return value;
     if (typeof value === 'string') {
       if (['1', 'true', 'yes', 'on'].includes(value.toLowerCase())) return true;
-      if (['0', 'false', 'no', 'off'].includes(value.toLowerCase())) return false;
+      if (['0', 'false', 'no', 'off'].includes(value.toLowerCase()))
+        return false;
     }
     return undefined;
   }, z.boolean().default(fallback));

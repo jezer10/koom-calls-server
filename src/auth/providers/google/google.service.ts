@@ -35,9 +35,7 @@ export class GoogleService implements OAuthProvider, OnModuleInit {
   private readonly logger = new Logger(GoogleService.name);
   private client: OAuth2Client | null = null;
 
-  constructor(
-    @Inject(GOOGLE_CONFIG) private readonly google: GoogleConfig,
-  ) {}
+  constructor(@Inject(GOOGLE_CONFIG) private readonly google: GoogleConfig) {}
 
   onModuleInit(): void {
     const { clientId, clientSecret, redirectUri } = this.google;

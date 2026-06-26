@@ -1,5 +1,14 @@
 import { Global, Module } from '@nestjs/common';
-import { buildAppConfig, type AppConfig, type GoogleConfig, type LiveKitConfig, type RedisConfig, type PresenceConfig, type RateLimitConfig, type SecurityConfig } from './app.config';
+import {
+  buildAppConfig,
+  type AppConfig,
+  type GoogleConfig,
+  type LiveKitConfig,
+  type RedisConfig,
+  type PresenceConfig,
+  type RateLimitConfig,
+  type SecurityConfig,
+} from './app.config';
 import { parseEnv } from './env.schema';
 
 export const APP_CONFIG = 'APP_CONFIG';
@@ -15,7 +24,8 @@ export const SECURITY_APP_CONFIG = 'SECURITY_APP_CONFIG';
   providers: [
     {
       provide: APP_CONFIG,
-      useFactory: (): AppConfig => buildAppConfig(parseEnv(process.env), process.env),
+      useFactory: (): AppConfig =>
+        buildAppConfig(parseEnv(process.env), process.env),
     },
     {
       provide: LIVEKIT_CONFIG,

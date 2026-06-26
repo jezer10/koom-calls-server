@@ -143,9 +143,7 @@ describe('StaticSfuService', () => {
   });
 
   it('throws ServiceUnavailableException when apiSecret is missing', async () => {
-    const service = new StaticSfuService(
-      buildConfig({ apiKey: 'devkey' }),
-    );
+    const service = new StaticSfuService(buildConfig({ apiKey: 'devkey' }));
 
     await expect(
       service.issueToken({ callId: 'c1', userId: 'u1' }),
