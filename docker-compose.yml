@@ -33,10 +33,11 @@ services:
     command: --dev --bind 0.0.0.0
     volumes: ['./livekit/livekit.yaml:/etc/livekit.yaml:ro']
     env_file: .env
-    # Plano de control 7880 queda en la red internal (solo `api` lo usa).
+    # Plano de control 7880: también en npm-proxy para que NPM pueda
+    # hacer reverse-proxy hacia `livekit:7880` (SFU_URL pública).
     # Plano de medios 7881/7882 UDP lo publica el workflow de prod o el
     # proxy reverso del VPS — ver docs/CI-CD.md §3.
-    networks: [internal]
+    networks: [internal, npm-proxy]
 
   coturn:
     image: coturn/coturn:latest
