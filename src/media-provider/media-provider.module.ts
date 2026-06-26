@@ -1,15 +1,17 @@
 import {
   Global,
+  Inject,
   Logger,
   Module,
   type OnApplicationBootstrap,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { MEDIA_PROVIDER, type MediaProvider } from './media-provider.interface';
 import { LiveKitMediaProvider } from './livekit.media-provider';
 import { NoopMediaProvider } from './noop.media-provider';
 import { createLiveKitClient } from './livekit.client';
 import { LiveKitHealthController } from './livekit-health.controller';
+import { LIVEKIT_CONFIG } from '../config/app-config.module';
+import type { LiveKitConfig } from '../config/app.config';
 
 export const LIVEKIT_URL_ENV = 'LIVEKIT_URL';
 export const LIVEKIT_API_KEY_ENV = 'LIVEKIT_API_KEY';
@@ -23,7 +25,7 @@ export interface MediaProviderEnv {
   apiSecret?: string;
 }
 
-function deriveHttpUrl(wsUrl: string | undefined): string | undefined {
+export function deriveHttpUrl(wsUrl: string | undefined): string | undefined {
   if (!wsUrl) return undefined;
   if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) return wsUrl;
   if (wsUrl.startsWith('ws://')) return `http://${wsUrl.slice('ws://'.length)}`;
@@ -72,16 +74,14 @@ export function selectMediaProvider(env: MediaProviderEnv): MediaProvider {
   providers: [
     {
       provide: MEDIA_PROVIDER,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService): MediaProvider =>
-        selectMediaProvider(
-          readMediaProviderEnv({
-            LIVEKIT_URL: configService.get<string>('LIVEKIT_URL'),
-            LIVEKIT_API_KEY: configService.get<string>('LIVEKIT_API_KEY'),
-            LIVEKIT_API_SECRET: configService.get<string>('LIVEKIT_API_SECRET'),
-            LIVEKIT_HTTP_URL: configService.get<string>('LIVEKIT_HTTP_URL'),
-          }),
-        ),
+      inject: [LIVEKIT_CONFIG],
+      useFactory: (livekit: LiveKitConfig): MediaProvider =>
+        selectMediaProvider({
+          url: livekit.url || undefined,
+          httpUrl: livekit.httpUrl || undefined,
+          apiKey: livekit.apiKey || undefined,
+          apiSecret: livekit.apiSecret || undefined,
+        }),
     },
   ],
   exports: [MEDIA_PROVIDER],
@@ -89,18 +89,14 @@ export function selectMediaProvider(env: MediaProviderEnv): MediaProvider {
 export class MediaProviderModule implements OnApplicationBootstrap {
   private readonly logger = new Logger(MediaProviderModule.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    @Inject(LIVEKIT_CONFIG) private readonly livekit: LiveKitConfig,
+  ) {}
 
   onApplicationBootstrap(): void {
-    const env = readMediaProviderEnv({
-      LIVEKIT_URL: this.configService.get<string>('LIVEKIT_URL'),
-      LIVEKIT_API_KEY: this.configService.get<string>('LIVEKIT_API_KEY'),
-      LIVEKIT_API_SECRET: this.configService.get<string>('LIVEKIT_API_SECRET'),
-      LIVEKIT_HTTP_URL: this.configService.get<string>('LIVEKIT_HTTP_URL'),
-    });
-    if (env.url && env.apiKey && env.apiSecret) {
+    if (this.livekit.url && this.livekit.apiKey && this.livekit.apiSecret) {
       this.logger.log(
-        `MediaProvider: LiveKit (url=${env.url}, httpUrl=${env.httpUrl}, key=${env.apiKey})`,
+        `MediaProvider: LiveKit (url=${this.livekit.url}, httpUrl=${this.livekit.httpUrl}, key=${this.livekit.apiKey})`,
       );
     } else {
       this.logger.warn(

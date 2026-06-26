@@ -9,7 +9,9 @@ describe('calls/generateRoomCode', () => {
   it('returns a string in the XXX-XXX-XXX shape using the expected alphabet', () => {
     for (let i = 0; i < 100; i += 1) {
       const code = generateRoomCode();
-      expect(code).toMatch(/^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/);
+      expect(code).toMatch(
+        /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/,
+      );
     }
   });
 
@@ -32,7 +34,9 @@ describe('CallsService', () => {
   describe('createCall', () => {
     it('generates a server-side roomId in the XXX-XXX-XXX format', () => {
       const call = service.createCall({ creatorId: 'user-1' });
-      expect(call.roomId).toMatch(/^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/);
+      expect(call.roomId).toMatch(
+        /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/,
+      );
       expect(call.id).not.toBe(call.roomId);
     });
 
@@ -42,7 +46,9 @@ describe('CallsService', () => {
         roomId: 'CALL-CLIENT-CHOSEN',
       });
       expect(call.roomId).not.toBe('CALL-CLIENT-CHOSEN');
-      expect(call.roomId).toMatch(/^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/);
+      expect(call.roomId).toMatch(
+        /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/,
+      );
     });
 
     it('records a created event with the generated roomId in the payload', () => {
@@ -51,7 +57,10 @@ describe('CallsService', () => {
       expect(evts).toHaveLength(1);
       expect(evts[0].type).toBe('created');
       expect(evts[0].userId).toBe('user-1');
-      expect(evts[0].payload).toEqual({ roomId: call.roomId, visibility: 'link' });
+      expect(evts[0].payload).toEqual({
+        roomId: call.roomId,
+        visibility: 'link',
+      });
     });
 
     it('registers the creator as a joined participant', () => {
@@ -87,7 +96,9 @@ describe('CallsService', () => {
       // collision only if the random space is exhausted. We can't easily
       // simulate that here, but we can verify the happy path resolves.
       const call = service.createCall({ creatorId: 'late' });
-      expect(call.roomId).toMatch(/^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/);
+      expect(call.roomId).toMatch(
+        /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/,
+      );
       // And that the error class is exported for the controller to translate.
       expect(new CallCodeCollisionError()).toBeInstanceOf(Error);
     });
@@ -116,7 +127,7 @@ describe('CallsService', () => {
     });
 
     it('with status=active returns only active calls (someone joined)', () => {
-      const a = service.createCall({ creatorId: 'user-1' });
+      service.createCall({ creatorId: 'user-1' });
       const b = service.createCall({ creatorId: 'user-1' });
       service.invite(b.id, 'user-1', 'user-2');
       service.accept(b.id, 'user-2');
@@ -128,7 +139,7 @@ describe('CallsService', () => {
 
     it('with status=ended returns only ended calls', () => {
       const a = service.createCall({ creatorId: 'user-1' });
-      const b = service.createCall({ creatorId: 'user-1' });
+      service.createCall({ creatorId: 'user-1' });
       service.end(a.id, 'user-1');
       const ids = service
         .listForUser('user-1', { status: 'ended' })
@@ -227,7 +238,9 @@ describe('CallsService', () => {
       service.end(call.id, 'user-1');
       // The call itself is still findable by UUID, but no longer by code.
       expect(service.getCall(call.id).status).toBe('ended');
-      expect(() => service.getCallByRoomCode(call.roomId)).toThrow(/not found/i);
+      expect(() => service.getCallByRoomCode(call.roomId)).toThrow(
+        /not found/i,
+      );
     });
   });
 
@@ -252,7 +265,9 @@ describe('CallsService', () => {
         creatorId: 'user-1',
         visibility: 'private',
       });
-      expect(() => service.join(call.id, 'user-2')).toThrow(/not a participant/i);
+      expect(() => service.join(call.id, 'user-2')).toThrow(
+        /not a participant/i,
+      );
     });
 
     it('allows a creator to join their own call regardless of visibility', () => {

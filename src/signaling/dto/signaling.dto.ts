@@ -16,12 +16,6 @@ export const callEventTypeSchema = z.enum([
   'call:end',
 ]);
 
-export const webrtcSignalTypeSchema = z.enum([
-  'webrtc:offer',
-  'webrtc:answer',
-  'webrtc:ice-candidate',
-]);
-
 export const sfuEventTypeSchema = z.enum([
   'sfu:join-room',
   'sfu:publish-track',
@@ -39,12 +33,6 @@ export const callEventPayloadSchema = z.object({
   callId: callIdSchema,
 });
 
-export const webrtcSignalPayloadSchema = z.object({
-  callId: callIdSchema,
-  to: userIdSchema,
-  signal: z.unknown(),
-});
-
 export const sfuPayloadSchema = z.object({
   callId: callIdSchema,
   room: z.string().min(1).optional(),
@@ -59,7 +47,6 @@ export const callInviteForUserSchema = z.object({
 
 export type CallInvitePayload = z.infer<typeof callInvitePayloadSchema>;
 export type CallEventPayload = z.infer<typeof callEventPayloadSchema>;
-export type WebrtcSignalPayload = z.infer<typeof webrtcSignalPayloadSchema>;
 export type SfuPayload = z.infer<typeof sfuPayloadSchema>;
 export type CallInviteForUser = z.infer<typeof callInviteForUserSchema>;
 
@@ -127,36 +114,6 @@ function parseGenericCallEvent(
   eventType: string,
 ): ParseResult<CallEventPayload> {
   const result = callEventPayloadSchema.safeParse(value);
-  if (!result.success) {
-    return { ok: false, reason: formatZodError(result.error) };
-  }
-  void eventType;
-  return { ok: true, value: result.data };
-}
-
-export function parseWebrtcOfferPayload(
-  value: unknown,
-): ParseResult<WebrtcSignalPayload> {
-  return parseWebrtcSignal(value, 'webrtc:offer');
-}
-
-export function parseWebrtcAnswerPayload(
-  value: unknown,
-): ParseResult<WebrtcSignalPayload> {
-  return parseWebrtcSignal(value, 'webrtc:answer');
-}
-
-export function parseWebrtcIceCandidatePayload(
-  value: unknown,
-): ParseResult<WebrtcSignalPayload> {
-  return parseWebrtcSignal(value, 'webrtc:ice-candidate');
-}
-
-function parseWebrtcSignal(
-  value: unknown,
-  eventType: string,
-): ParseResult<WebrtcSignalPayload> {
-  const result = webrtcSignalPayloadSchema.safeParse(value);
   if (!result.success) {
     return { ok: false, reason: formatZodError(result.error) };
   }

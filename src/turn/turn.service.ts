@@ -1,33 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import {
   TurnCredentials,
   TurnCredentialsOptions,
   TurnService,
 } from './turn.types';
+import { APP_CONFIG } from '../config/app-config.module';
+import type { AppConfig } from '../config/app.config';
 
 @Injectable()
 export class StaticTurnService implements TurnService {
   private readonly logger = new Logger(StaticTurnService.name);
-  private readonly ttlSeconds = 3600;
+  private readonly ttlSeconds: number;
   private readonly urls: string[];
   private readonly jwtSecret: string;
 
-  constructor(configService: ConfigService) {
-    this.jwtSecret = configService.getOrThrow<string>('JWT_SECRET');
-    const raw = configService.get<string>('TURN_URLS') ?? '';
-    if (raw.length > 0) {
-      this.urls = raw
-        .split(',')
-        .map((u) => u.trim())
-        .filter(Boolean);
-    } else {
-      this.urls = [
-        'turn:turn.koom.example.com:3478?transport=udp',
-        'turn:turn.koom.example.com:3478?transport=tcp',
-      ];
-    }
+  constructor(@Inject(APP_CONFIG) appConfig: AppConfig) {
+    this.jwtSecret = appConfig.jwt.secret;
+    this.ttlSeconds = appConfig.turn.ttlSeconds;
+    this.urls = appConfig.turn.urls;
   }
 
   generateCredentials(opts: TurnCredentialsOptions): TurnCredentials {

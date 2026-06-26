@@ -5,11 +5,6 @@ export type CallEventType =
   | 'call:cancel'
   | 'call:end';
 
-export type WebrtcSignalType =
-  | 'webrtc:offer'
-  | 'webrtc:answer'
-  | 'webrtc:ice-candidate';
-
 export type SfuEventType =
   | 'sfu:join-room'
   | 'sfu:publish-track'

@@ -1,10 +1,10 @@
 import {
+  Inject,
   Injectable,
   Logger,
   OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { OAuth2Client } from 'google-auth-library';
 import type { TokenPayload } from 'google-auth-library';
 import type {
@@ -12,6 +12,8 @@ import type {
   OAuthProvider,
   OAuthProviderMeta,
 } from '../oauth-provider.interface';
+import { GOOGLE_CONFIG } from '../../../config/app-config.module';
+import type { GoogleConfig } from '../../../config/app.config';
 
 const GOOGLE_ISSUERS = new Set([
   'https://accounts.google.com',
@@ -31,28 +33,20 @@ export class GoogleService implements OAuthProvider, OnModuleInit {
   };
 
   private readonly logger = new Logger(GoogleService.name);
-  private clientId = '';
-  private clientSecret = '';
-  private redirectUri = '';
   private client: OAuth2Client | null = null;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(@Inject(GOOGLE_CONFIG) private readonly google: GoogleConfig) {}
 
   onModuleInit(): void {
-    const id = this.config.get<string>('GOOGLE_CLIENT_ID');
-    const secret = this.config.get<string>('GOOGLE_CLIENT_SECRET');
-    const redirect = this.config.get<string>('GOOGLE_REDIRECT_URI');
-    if (!id || !secret || !redirect) {
+    const { clientId, clientSecret, redirectUri } = this.google;
+    if (!clientId || !clientSecret || !redirectUri) {
       this.meta.enabled = false;
       this.logger.warn(
         'Google OAuth not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI). Login is disabled.',
       );
       return;
     }
-    this.clientId = id;
-    this.clientSecret = secret;
-    this.redirectUri = redirect;
-    this.client = new OAuth2Client(id, secret, redirect);
+    this.client = new OAuth2Client(clientId, clientSecret, redirectUri);
     this.meta.enabled = true;
     this.logger.log('Google login enabled.');
   }
@@ -66,7 +60,7 @@ export class GoogleService implements OAuthProvider, OnModuleInit {
       scope: GOOGLE_SCOPES,
       state,
       prompt: 'select_account',
-      redirect_uri: this.redirectUri,
+      redirect_uri: this.google.redirectUri,
       include_granted_scopes: true,
     });
   }
@@ -82,7 +76,7 @@ export class GoogleService implements OAuthProvider, OnModuleInit {
     try {
       const result = await this.client.getToken({
         code,
-        redirect_uri: this.redirectUri,
+        redirect_uri: this.google.redirectUri,
       });
       tokens = result.tokens;
     } catch (err) {
@@ -104,7 +98,7 @@ export class GoogleService implements OAuthProvider, OnModuleInit {
     try {
       ticket = await this.client.verifyIdToken({
         idToken,
-        audience: this.clientId,
+        audience: this.google.clientId,
       });
     } catch (err) {
       throw new UnauthorizedException(
@@ -123,7 +117,7 @@ export class GoogleService implements OAuthProvider, OnModuleInit {
     if (!GOOGLE_ISSUERS.has(claims.iss)) {
       throw new UnauthorizedException('invalid google issuer');
     }
-    if (claims.aud !== this.clientId) {
+    if (claims.aud !== this.google.clientId) {
       throw new UnauthorizedException('invalid google audience');
     }
     if (!claims.sub) {

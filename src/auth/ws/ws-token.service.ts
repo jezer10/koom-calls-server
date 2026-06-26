@@ -1,4 +1,8 @@
-import { Injectable, OnModuleDestroy, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
 
@@ -32,7 +36,10 @@ export class WsTokenService implements OnModuleDestroy {
     clearInterval(this.sweepTimer);
   }
 
-  issue(userId: string, ttlSeconds: number = DEFAULT_TTL_SECONDS): WsTokenResult {
+  issue(
+    userId: string,
+    ttlSeconds: number = DEFAULT_TTL_SECONDS,
+  ): WsTokenResult {
     const jti = randomBytes(16).toString('base64url');
     const now = Math.floor(Date.now() / 1000);
     const exp = now + ttlSeconds;

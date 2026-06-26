@@ -112,6 +112,78 @@ describe('buildAppConfig', () => {
     });
   });
 
+  it('builds livekit namespace with sfuUrl falling back to LIVEKIT_URL when SFU_URL is empty', () => {
+    const env: NodeJS.ProcessEnv = {
+      LIVEKIT_URL: 'ws://livekit:7880',
+      LIVEKIT_API_KEY: 'key',
+      LIVEKIT_API_SECRET: 'secret',
+      TURN_URL: 'turn:turn.example.com:3478',
+    };
+    const cfg = build(env);
+    expect(cfg.livekit.url).toBe('ws://livekit:7880');
+    expect(cfg.livekit.sfuUrl).toBe('ws://livekit:7880');
+    expect(cfg.livekit.httpUrl).toBe('http://livekit:7880');
+    expect(cfg.livekit.apiKey).toBe('key');
+    expect(cfg.livekit.apiSecret).toBe('secret');
+  });
+
+  it('uses SFU_URL over LIVEKIT_URL when both are set', () => {
+    const env: NodeJS.ProcessEnv = {
+      LIVEKIT_URL: 'ws://livekit:7880',
+      SFU_URL: 'wss://livekit.example.com',
+      LIVEKIT_API_KEY: 'key',
+      LIVEKIT_API_SECRET: 'secret',
+      TURN_URL: 'turn:turn.example.com:3478',
+    };
+    const cfg = build(env);
+    expect(cfg.livekit.url).toBe('ws://livekit:7880');
+    expect(cfg.livekit.sfuUrl).toBe('wss://livekit.example.com');
+  });
+
+  it('builds google namespace from env', () => {
+    const env: NodeJS.ProcessEnv = {
+      GOOGLE_CLIENT_ID: 'cid',
+      GOOGLE_CLIENT_SECRET: 'csecret',
+      GOOGLE_REDIRECT_URI: 'https://app.example.com/cb',
+      FRONTEND_ORIGIN: 'https://app.example.com',
+      TURN_URL: 'turn:turn.example.com:3478',
+    };
+    const cfg = build(env);
+    expect(cfg.google.clientId).toBe('cid');
+    expect(cfg.google.clientSecret).toBe('csecret');
+    expect(cfg.google.redirectUri).toBe('https://app.example.com/cb');
+    expect(cfg.google.frontendOrigin).toBe('https://app.example.com');
+  });
+
+  it('builds redis and presence namespaces', () => {
+    const env: NodeJS.ProcessEnv = {
+      REDIS_URL: 'redis://redis:6379',
+      TURN_URL: 'turn:turn.example.com:3478',
+    };
+    const cfg = build(env);
+    expect(cfg.redis.url).toBe('redis://redis:6379');
+    expect(typeof cfg.presence.ttlSeconds).toBe('number');
+  });
+
+  it('builds rateLimit namespace from env', () => {
+    const env: NodeJS.ProcessEnv = {
+      RATE_LIMIT_SOCKET_PER_SECOND: '5',
+      RATE_LIMIT_USER_PER_SECOND: '10',
+      RATE_LIMIT_IP_PER_SECOND: '20',
+      RATE_LIMIT_SOCKET_BURST: '3',
+      RATE_LIMIT_USER_BURST: '5',
+      RATE_LIMIT_IP_BURST: '8',
+      TURN_URL: 'turn:turn.example.com:3478',
+    };
+    const cfg = build(env);
+    expect(cfg.rateLimit.socketPerSecond).toBe(5);
+    expect(cfg.rateLimit.userPerSecond).toBe(10);
+    expect(cfg.rateLimit.ipPerSecond).toBe(20);
+    expect(cfg.rateLimit.socketBurst).toBe(3);
+    expect(cfg.rateLimit.userBurst).toBe(5);
+    expect(cfg.rateLimit.ipBurst).toBe(8);
+  });
+
   it('parses TURN_STUN_URLS as a comma-separated list', () => {
     const env: NodeJS.ProcessEnv = {
       TURN_URL: 'turn:turn.example.com:3478',

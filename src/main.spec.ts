@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { bootstrap } from './main';
+import type { AppConfig } from './config/app.config';
 
 describe('bootstrap()', () => {
   let logSpy: jest.SpyInstance;
@@ -9,20 +10,14 @@ describe('bootstrap()', () => {
 
   beforeEach(() => {
     listenSpy = jest.fn().mockResolvedValue(undefined);
-    const fakeConfigService = {
-      get: jest.fn((key: string) => {
-        if (key === 'CORS_ORIGIN') return '*';
-        return undefined;
-      }),
-      getOrThrow: jest.fn((key: string) => {
-        if (key === 'PORT') return 8080;
-        if (key === 'SIGNALING_NAMESPACE') return '/signaling';
-        throw new Error(`unexpected key ${key}`);
-      }),
+    const fakeAppConfig: Partial<AppConfig> = {
+      httpPort: 8080,
+      signaling: { namespace: '/signaling', corsOrigin: '*' },
+      redis: { url: '' },
     };
     const fakeApp = {
       listen: listenSpy,
-      get: jest.fn().mockReturnValue(fakeConfigService),
+      get: jest.fn().mockReturnValue(fakeAppConfig),
       useWebSocketAdapter: jest.fn(),
       enableCors: jest.fn(),
       use: jest.fn(),

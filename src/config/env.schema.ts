@@ -17,6 +17,18 @@ const numberFromString = (fallback: number) =>
     return undefined;
   }, z.number().int().default(fallback));
 
+const booleanFromString = (fallback: boolean) =>
+  z.preprocess((value: unknown) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      if (['1', 'true', 'yes', 'on'].includes(value.toLowerCase())) return true;
+      if (['0', 'false', 'no', 'off'].includes(value.toLowerCase()))
+        return false;
+    }
+    return undefined;
+  }, z.boolean().default(fallback));
+
 const generateJwtSecret = (): string => randomBytes(48).toString('base64url');
 
 const detectNodeEnv = (raw: string | undefined): NodeEnv => {
@@ -81,6 +93,7 @@ export function buildEnvSchema(
       CORS_ORIGIN: z.string().default('*'),
       SIGNALING_NAMESPACE: z.string().default('/signaling'),
       DATABASE_URL: z.string().default('sqlite::memory:'),
+      DATABASE_SSL: booleanFromString(false),
       JWT_SECRET: jwtSecretField,
       JWT_TTL: z.string().default('1h'),
       JWT_AUDIENCE: z.string().optional(),
@@ -107,19 +120,6 @@ export function buildEnvSchema(
       LOG_LEVEL: z.string().default('debug'),
       NODE_ENV: nodeEnvField,
       GOOGLE_CLIENT_ID: z.string().default(''),
-      AUTH_ANONYMOUS_LOGIN_ENABLED: z
-        .preprocess((value: unknown) => {
-          if (value === undefined || value === null || value === '')
-            return undefined;
-          if (typeof value === 'boolean') return value;
-          if (typeof value === 'string') {
-            const v = value.toLowerCase();
-            if (v === 'true' || v === '1' || v === 'yes') return true;
-            if (v === 'false' || v === '0' || v === 'no') return false;
-          }
-          return undefined;
-        }, z.boolean())
-        .default(detectedEnv === 'production' ? false : true),
     })
     .superRefine((data, ctx) => {
       if (data.NODE_ENV !== 'production') return;
@@ -162,6 +162,7 @@ export type ParsedEnv = {
   CORS_ORIGIN: string;
   SIGNALING_NAMESPACE: string;
   DATABASE_URL: string;
+  DATABASE_SSL: boolean;
   JWT_SECRET: string;
   JWT_TTL: string;
   JWT_AUDIENCE?: string;
@@ -191,7 +192,6 @@ export type ParsedEnv = {
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
   FRONTEND_ORIGIN: string;
-  AUTH_ANONYMOUS_LOGIN_ENABLED: boolean;
 };
 
 export interface ParseEnvOptions extends EnvSchemaOptions {
@@ -239,6 +239,7 @@ function pickParsed(raw: Record<string, unknown>): ParsedEnv {
     CORS_ORIGIN: raw['CORS_ORIGIN'] as string,
     SIGNALING_NAMESPACE: raw['SIGNALING_NAMESPACE'] as string,
     DATABASE_URL: raw['DATABASE_URL'] as string,
+    DATABASE_SSL: raw['DATABASE_SSL'] as boolean,
     JWT_SECRET: raw['JWT_SECRET'] as string,
     JWT_TTL: raw['JWT_TTL'] as string,
     JWT_AUDIENCE: raw['JWT_AUDIENCE'] as string | undefined,
@@ -262,12 +263,11 @@ function pickParsed(raw: Record<string, unknown>): ParsedEnv {
     RATE_LIMIT_IP_BURST: raw['RATE_LIMIT_IP_BURST'] as number,
     SFU_TOKEN_TTL_SECONDS: raw['SFU_TOKEN_TTL_SECONDS'] as number,
     PRESENCE_TTL_SECONDS: raw['PRESENCE_TTL_SECONDS'] as number,
-      LOG_LEVEL: raw['LOG_LEVEL'] as string,
-      NODE_ENV: raw['NODE_ENV'] as NodeEnv,
-      GOOGLE_CLIENT_ID: raw['GOOGLE_CLIENT_ID'] as string,
-      GOOGLE_CLIENT_SECRET: raw['GOOGLE_CLIENT_SECRET'] as string,
-      GOOGLE_REDIRECT_URI: raw['GOOGLE_REDIRECT_URI'] as string,
-      FRONTEND_ORIGIN: raw['FRONTEND_ORIGIN'] as string,
-      AUTH_ANONYMOUS_LOGIN_ENABLED: raw['AUTH_ANONYMOUS_LOGIN_ENABLED'] as boolean,
-    };
-  }
+    LOG_LEVEL: raw['LOG_LEVEL'] as string,
+    NODE_ENV: raw['NODE_ENV'] as NodeEnv,
+    GOOGLE_CLIENT_ID: raw['GOOGLE_CLIENT_ID'] as string,
+    GOOGLE_CLIENT_SECRET: raw['GOOGLE_CLIENT_SECRET'] as string,
+    GOOGLE_REDIRECT_URI: raw['GOOGLE_REDIRECT_URI'] as string,
+    FRONTEND_ORIGIN: raw['FRONTEND_ORIGIN'] as string,
+  };
+}

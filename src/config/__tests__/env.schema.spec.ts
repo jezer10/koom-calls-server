@@ -42,7 +42,6 @@ describe('parseEnv', () => {
       'GOOGLE_CLIENT_SECRET',
       'GOOGLE_REDIRECT_URI',
       'FRONTEND_ORIGIN',
-      'AUTH_ANONYMOUS_LOGIN_ENABLED',
     ]) {
       delete process.env[key];
     }
@@ -117,7 +116,8 @@ describe('parseEnv', () => {
           env['TURN_SHARED_SECRET'] = 'turn-secret';
           env['GOOGLE_CLIENT_ID'] = 'prod.apps.googleusercontent.com';
           env['GOOGLE_CLIENT_SECRET'] = 'prod-secret';
-          env['GOOGLE_REDIRECT_URI'] = 'https://app.example.com/auth/google/callback';
+          env['GOOGLE_REDIRECT_URI'] =
+            'https://app.example.com/auth/google/callback';
           env['FRONTEND_ORIGIN'] = 'https://app.example.com';
           env['CORS_ORIGIN'] = 'https://app.example.com';
         }
@@ -339,38 +339,6 @@ describe('parseEnv', () => {
         parseEnv({ GOOGLE_CLIENT_ID: 'dev.apps.googleusercontent.com' })
           .GOOGLE_CLIENT_ID,
       ).toBe('dev.apps.googleusercontent.com');
-    });
-
-    it('AUTH_ANONYMOUS_LOGIN_ENABLED defaults to true in development, false in production', () => {
-      expect(parseEnv({ NODE_ENV: 'development' }).AUTH_ANONYMOUS_LOGIN_ENABLED).toBe(
-        true,
-      );
-      expect(parseEnv({}).AUTH_ANONYMOUS_LOGIN_ENABLED).toBe(true);
-      expect(
-        parseEnv({
-          NODE_ENV: 'production',
-          JWT_SECRET: 'prod',
-          TURN_URL: 'turn:turn.example.com:3478',
-          TURN_SHARED_SECRET: 'turn-secret',
-          GOOGLE_CLIENT_ID: 'prod.apps.googleusercontent.com',
-          CORS_ORIGIN: 'https://app.example.com',
-        }).AUTH_ANONYMOUS_LOGIN_ENABLED,
-      ).toBe(false);
-    });
-
-    it('AUTH_ANONYMOUS_LOGIN_ENABLED accepts string boolean forms', () => {
-      expect(
-        parseEnv({ AUTH_ANONYMOUS_LOGIN_ENABLED: 'true' }).AUTH_ANONYMOUS_LOGIN_ENABLED,
-      ).toBe(true);
-      expect(
-        parseEnv({ AUTH_ANONYMOUS_LOGIN_ENABLED: 'false' }).AUTH_ANONYMOUS_LOGIN_ENABLED,
-      ).toBe(false);
-      expect(
-        parseEnv({ AUTH_ANONYMOUS_LOGIN_ENABLED: '1' }).AUTH_ANONYMOUS_LOGIN_ENABLED,
-      ).toBe(true);
-      expect(
-        parseEnv({ AUTH_ANONYMOUS_LOGIN_ENABLED: '0' }).AUTH_ANONYMOUS_LOGIN_ENABLED,
-      ).toBe(false);
     });
 
     it('rejects missing GOOGLE_CLIENT_ID in production', () => {

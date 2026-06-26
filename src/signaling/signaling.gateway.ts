@@ -25,16 +25,12 @@ import {
   parseSfuJoinRoomPayload,
   parseSfuPublishTrackPayload,
   parseSfuSubscribeTrackPayload,
-  parseWebrtcAnswerPayload,
-  parseWebrtcIceCandidatePayload,
-  parseWebrtcOfferPayload,
 } from './dto/signaling.dto';
 import type {
   CallEventType,
   PeerJoinedEvent,
   PeerLeftEvent,
   PeerReconnectingEvent,
-  RoomMember,
   SfuEventAck,
 } from './signaling.types';
 
@@ -309,48 +305,6 @@ export class SignalingGateway
     );
   }
 
-  @SubscribeMessage('webrtc:offer')
-  handleWebrtcOffer(
-    @MessageBody() payload: unknown,
-    @ConnectedSocket() client: Io.Socket,
-  ) {
-    this.enforceRateLimit(client);
-    return this.forwardWebrtc(
-      client,
-      payload,
-      'webrtc:offer',
-      parseWebrtcOfferPayload,
-    );
-  }
-
-  @SubscribeMessage('webrtc:answer')
-  handleWebrtcAnswer(
-    @MessageBody() payload: unknown,
-    @ConnectedSocket() client: Io.Socket,
-  ) {
-    this.enforceRateLimit(client);
-    return this.forwardWebrtc(
-      client,
-      payload,
-      'webrtc:answer',
-      parseWebrtcAnswerPayload,
-    );
-  }
-
-  @SubscribeMessage('webrtc:ice-candidate')
-  handleWebrtcIceCandidate(
-    @MessageBody() payload: unknown,
-    @ConnectedSocket() client: Io.Socket,
-  ) {
-    this.enforceRateLimit(client);
-    return this.forwardWebrtc(
-      client,
-      payload,
-      'webrtc:ice-candidate',
-      parseWebrtcIceCandidatePayload,
-    );
-  }
-
   @SubscribeMessage('sfu:join-room')
   async handleSfuJoinRoom(
     @MessageBody() payload: unknown,
@@ -431,39 +385,6 @@ export class SignalingGateway
     return { ok: true, callId, event };
   }
 
-  private forwardWebrtc(
-    client: Io.Socket,
-    payload: unknown,
-    type: 'webrtc:offer' | 'webrtc:answer' | 'webrtc:ice-candidate',
-    parser: (
-      v: unknown,
-    ) =>
-      | { ok: true; value: { callId: string; to: string; signal: unknown } }
-      | { ok: false; reason: string },
-  ): { ok: true; callId: string; to: string; type: string } {
-    const userId = getUserId(client);
-    const parsed = parser(payload);
-    if (!parsed.ok) {
-      throw new WsException(`invalid payload: ${parsed.reason}`);
-    }
-    const { callId, to, signal } = parsed.value;
-    if (!this.registry.isParticipant(callId, userId)) {
-      throw new WsException('forbidden');
-    }
-    const targetMember = this.findMemberByUserId(callId, to);
-    if (!targetMember) {
-      throw new WsException(`target user ${to} not in call ${callId}`);
-    }
-    this.server.to(targetMember.socketId).emit('webrtc:signal', {
-      callId,
-      from: userId,
-      to,
-      type,
-      signal,
-    });
-    return { ok: true, callId, to, type };
-  }
-
   private async handleSfu(
     client: Io.Socket,
     payload: unknown,
@@ -497,15 +418,5 @@ export class SignalingGateway
     }
     void type;
     return { status: 'pending-m3' };
-  }
-
-  private findMemberByUserId(
-    callId: string,
-    userId: string,
-  ): RoomMember | undefined {
-    for (const member of this.registry.members(callId)) {
-      if (member.userId === userId) return member;
-    }
-    return undefined;
   }
 }

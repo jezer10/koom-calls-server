@@ -2,6 +2,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -11,16 +12,23 @@ import { UsersRepository } from './users.repository';
 import { OAuthProvidersRegistry } from './providers/oauth-providers.registry';
 import {
   OAUTH_PROVIDERS,
+  type OAuthProfile,
   type OAuthProvider,
   type OAuthProvidersMap,
 } from './providers/oauth-provider.interface';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { WsTokenService } from './ws/ws-token.service';
+import { APP_CONFIG } from '../config/app-config.module';
+import type { AppConfig } from '../config/app.config';
 
 class StubJwtAuthGuard {
-  canActivate(ctx: { switchToHttp: () => { getRequest: () => Record<string, unknown> } }): boolean {
-    const req = ctx.switchToHttp().getRequest() as { user?: { userId: string } };
+  canActivate(ctx: {
+    switchToHttp: () => { getRequest: () => Record<string, unknown> };
+  }): boolean {
+    const req = ctx.switchToHttp().getRequest() as {
+      user?: { userId: string };
+    };
     if (req.user) return true;
     return false;
   }
@@ -28,17 +36,24 @@ class StubJwtAuthGuard {
 
 function makeProvider(
   enabled: boolean,
-  exchangeImpl: OAuthProvider['exchangeAndVerify'] = async () => ({
-    provider: 'google',
-    providerSub: 'sub-1',
-    email: 'g@x.com',
-    emailVerified: true,
-    displayName: 'G',
-    picture: null,
-  }),
+  exchangeImpl: OAuthProvider['exchangeAndVerify'] = () =>
+    Promise.resolve({
+      provider: 'google',
+      providerSub: 'sub-1',
+      email: 'g@x.com',
+      emailVerified: true,
+      displayName: 'G',
+      picture: null,
+    }),
 ): OAuthProvider {
   return {
-    meta: { name: 'google', displayName: 'Google', configKey: 'GOOGLE_CLIENT_ID', enabled, startUrl: '/auth/google/start' },
+    meta: {
+      name: 'google',
+      displayName: 'Google',
+      configKey: 'GOOGLE_CLIENT_ID',
+      enabled,
+      startUrl: '/auth/google/start',
+    },
     exchangeAndVerify: exchangeImpl,
     buildAuthorizationUrl: (state: string) =>
       `https://accounts.google.com/o/oauth2/v2/auth?state=${state}`,
@@ -61,34 +76,44 @@ describe('AuthController (HTTP)', () => {
     createdAt: new Date(),
   });
 
-  const buildApp = async (googleEnabled: boolean, opts: { verify?: OAuthProvider['exchangeAndVerify']; cookieState?: string; cookieReturnTo?: string; frontend?: string; usersRepo?: { upsertByProvider: jest.Mock; findById: jest.Mock } } = {}) => {
+  const buildApp = async (
+    googleEnabled: boolean,
+    opts: {
+      verify?: OAuthProvider['exchangeAndVerify'];
+      cookieState?: string;
+      cookieReturnTo?: string;
+      frontend?: string;
+      usersRepo?: { upsertByProvider: jest.Mock; findById: jest.Mock };
+    } = {},
+  ) => {
     audit = { log: jest.fn() };
     const google = makeProvider(googleEnabled, opts.verify);
     const providers: OAuthProvidersMap = new Map([['google', google]]);
     const users = opts.usersRepo ?? {
-      upsertByProvider: jest.fn().mockImplementation(async (profile) => ({
-        id: 'u-1',
-        email: profile.email ?? null,
-        displayName: profile.displayName,
-        provider: profile.provider,
-        providerSub: profile.providerSub,
-        picture: null,
-        lastLoginAt: new Date(),
-        createdAt: new Date(),
-      })),
+      upsertByProvider: jest.fn().mockImplementation((profile: OAuthProfile) =>
+        Promise.resolve({
+          id: 'u-1',
+          email: profile.email,
+          displayName: profile.displayName,
+          provider: profile.provider,
+          providerSub: profile.providerSub,
+          picture: null,
+          lastLoginAt: new Date(),
+          createdAt: new Date(),
+        }),
+      ),
       findById: jest.fn().mockResolvedValue(makeUser()),
     };
 
-    const configGet: Record<string, string> = {
-      FRONTEND_ORIGIN: opts.frontend ?? FRONTEND,
-      AUTH_ANONYMOUS_LOGIN_ENABLED: 'true',
-      JWT_SECRET: 'test-secret',
-    };
-    const config = {
-      get: (k: string) => configGet[k],
+    const appConfig = {
+      google: { frontendOrigin: opts.frontend ?? FRONTEND },
+      nodeEnv: 'test',
+    } as AppConfig;
+    const configService = {
+      get: (k: string) => (k === 'JWT_SECRET' ? 'test-secret' : undefined),
       getOrThrow: (k: string) => {
-        if (!configGet[k]) throw new Error(`missing ${k}`);
-        return configGet[k];
+        if (k === 'JWT_SECRET') return 'test-secret';
+        throw new Error(`missing ${k}`);
       },
     } as unknown as ConfigService;
 
@@ -109,8 +134,14 @@ describe('AuthController (HTTP)', () => {
         StubJwtAuthGuard,
         { provide: AuthAuditLogger, useValue: audit },
         { provide: UsersRepository, useValue: users },
-        { provide: JwtService, useValue: { sign: (payload: object) => `signed.${JSON.stringify(payload)}` } },
-        { provide: ConfigService, useValue: config },
+        {
+          provide: JwtService,
+          useValue: {
+            sign: (payload: object) => `signed.${JSON.stringify(payload)}`,
+          },
+        },
+        { provide: APP_CONFIG, useValue: appConfig },
+        { provide: ConfigService, useValue: configService },
         OAuthProvidersRegistry,
         { provide: OAUTH_PROVIDERS, useValue: providers },
         WsTokenService,
@@ -122,8 +153,8 @@ describe('AuthController (HTTP)', () => {
 
     const app = module.createNestApplication();
     // Wire cookie-parser so req.cookies is populated, matching runtime.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    app.use(require('cookie-parser')());
+
+    app.use(cookieParser());
     await app.init();
 
     // Inject cookies into the testing client via supertest by wrapping request.
@@ -132,17 +163,27 @@ describe('AuthController (HTTP)', () => {
 
   it('GET /auth/providers lists enabled google and anonymous', async () => {
     const { app } = await buildApp(true);
-    const res = await request(app.getHttpServer()).get('/auth/providers').expect(200);
-    const body = res.body as { providers: Array<{ name: string; enabled: boolean; startUrl?: string }> };
+    const res = await request(app.getHttpServer())
+      .get('/auth/providers')
+      .expect(200);
+    const body = res.body as {
+      providers: Array<{ name: string; enabled: boolean; startUrl?: string }>;
+    };
     const google = body.providers.find((p) => p.name === 'google');
-    expect(google).toMatchObject({ name: 'google', enabled: true, startUrl: '/auth/google/start' });
+    expect(google).toMatchObject({
+      name: 'google',
+      enabled: true,
+      startUrl: '/auth/google/start',
+    });
     const anon = body.providers.find((p) => p.name === 'anonymous');
     expect(anon).toMatchObject({ name: 'anonymous', enabled: true });
   });
 
   it('GET /auth/providers omits google when disabled', async () => {
     const { app } = await buildApp(false);
-    const res = await request(app.getHttpServer()).get('/auth/providers').expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/auth/providers')
+      .expect(200);
     const body = res.body as { providers: Array<{ name: string }> };
     expect(body.providers.find((p) => p.name === 'google')).toBeUndefined();
   });
@@ -213,7 +254,7 @@ describe('AuthController (HTTP)', () => {
   });
 
   it('GET /auth/google/callback returns 401 when verify throws', async () => {
-    const verify = jest.fn().mockImplementation(async () => {
+    const verify = jest.fn().mockImplementation(() => {
       throw new Error('bad');
     });
     const { app } = await buildApp(true, { verify, cookieState: 's' });

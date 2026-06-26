@@ -423,12 +423,14 @@ describe('Multiuser call lifecycle (e2e)', () => {
       .send({ roomId: 'CLIENT-CHOSEN', invitees: [] })
       .expect(201);
     const call = res.body as CreateCallResponse;
-    expect(call.roomId).toMatch(/^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/);
+    expect(call.roomId).toMatch(
+      /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/,
+    );
     expect(call.roomId).not.toBe('CLIENT-CHOSEN');
     expect(call.id).not.toBe(call.roomId);
   });
 
-  it('9. GET /calls/mine returns only the authenticated user\'s calls', async () => {
+  it("9. GET /calls/mine returns only the authenticated user's calls", async () => {
     const alice = authedRequest(app, tokenA);
     const bob = authedRequest(app, tokenB);
     const mallory = authedRequest(app, tokenC);
@@ -493,7 +495,9 @@ describe('Multiuser call lifecycle (e2e)', () => {
     expect(endedIds).toEqual([toEndCall.id]);
 
     const pending = await alice.get('/calls/mine?status=pending').expect(200);
-    const pendingIds = (pending.body as ListMineResponse).calls.map((c) => c.id);
+    const pendingIds = (pending.body as ListMineResponse).calls.map(
+      (c) => c.id,
+    );
     expect(pendingIds).toEqual([liveCall.id]);
 
     // Clean up
@@ -518,13 +522,17 @@ describe('Multiuser call lifecycle (e2e)', () => {
     // Bob was never invited but can join because the call is open.
     const bobJoin = await bob.post(`/calls/${call.id}/join`).expect(200);
     const bobBody = bobJoin.body as CreateCallResponse;
-    expect(bobBody.participants.find((p) => p.userId === TEST_USER_B)).toMatchObject({
+    expect(
+      bobBody.participants.find((p) => p.userId === TEST_USER_B),
+    ).toMatchObject({
       role: 'invitee',
       status: 'joined',
     });
 
     // Mallory too.
-    const malloryJoin = await mallory.post(`/calls/${call.id}/join`).expect(200);
+    const malloryJoin = await mallory
+      .post(`/calls/${call.id}/join`)
+      .expect(200);
     expect(
       (malloryJoin.body as CreateCallResponse).participants.find(
         (p) => p.userId === TEST_USER_C,

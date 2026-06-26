@@ -1,5 +1,5 @@
+import { Global, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
   LIVEKIT_API_KEY_ENV,
   LIVEKIT_API_SECRET_ENV,
@@ -14,21 +14,31 @@ import {
   MEDIA_PROVIDER,
   type MediaProvider,
 } from '../media-provider.interface';
+import { LIVEKIT_CONFIG } from '../../config/app-config.module';
+import type { LiveKitConfig } from '../../config/app.config';
 
-function buildModule(values: Record<string, string>) {
-  const configService: Partial<ConfigService> = {
-    get: <T = string>(key: string): T | undefined =>
-      values[key] as unknown as T,
+function buildLivekitConfig(values: Partial<LiveKitConfig>): LiveKitConfig {
+  return {
+    url: '',
+    apiKey: '',
+    apiSecret: '',
+    httpUrl: '',
+    sfuUrl: '',
+    ...values,
   };
-  return Test.createTestingModule({
-    imports: [
-      ConfigModule.forRoot({ ignoreEnvFile: true, isGlobal: true }),
-      MediaProviderModule,
-    ],
+}
+
+function buildModule(livekit: LiveKitConfig) {
+  @Global()
+  @Module({
+    providers: [{ provide: LIVEKIT_CONFIG, useValue: livekit }],
+    exports: [LIVEKIT_CONFIG],
   })
-    .overrideProvider(ConfigService)
-    .useValue(configService)
-    .compile();
+  class FakeLivekitConfigModule {}
+
+  return Test.createTestingModule({
+    imports: [FakeLivekitConfigModule, MediaProviderModule],
+  }).compile();
 }
 
 describe('media-provider module', () => {
@@ -86,20 +96,22 @@ describe('media-provider module', () => {
   });
 
   describe('MediaProviderModule', () => {
-    it('provides a LiveKitMediaProvider when ConfigService has LiveKit vars', async () => {
-      const mod = await buildModule({
-        LIVEKIT_URL: 'wss://livekit',
-        LIVEKIT_API_KEY: 'APIKEY',
-        LIVEKIT_API_SECRET: 'APISECRET',
-      });
+    it('provides a LiveKitMediaProvider when LIVEKIT_CONFIG has LiveKit vars', async () => {
+      const mod = await buildModule(
+        buildLivekitConfig({
+          url: 'wss://livekit',
+          apiKey: 'APIKEY',
+          apiSecret: 'APISECRET',
+        }),
+      );
 
       const provider = mod.get<MediaProvider>(MEDIA_PROVIDER);
       expect(provider).toBeInstanceOf(LiveKitMediaProvider);
       await mod.close();
     });
 
-    it('provides a NoopMediaProvider when ConfigService has no LiveKit vars', async () => {
-      const mod = await buildModule({});
+    it('provides a NoopMediaProvider when LIVEKIT_CONFIG has no LiveKit vars', async () => {
+      const mod = await buildModule(buildLivekitConfig({}));
 
       const provider = mod.get<MediaProvider>(MEDIA_PROVIDER);
       expect(provider).toBeInstanceOf(NoopMediaProvider);
@@ -107,7 +119,7 @@ describe('media-provider module', () => {
     });
 
     it('exposes MEDIA_PROVIDER through @Global export', async () => {
-      const mod = await buildModule({});
+      const mod = await buildModule(buildLivekitConfig({}));
 
       expect(() => mod.get<MediaProvider>(MEDIA_PROVIDER)).not.toThrow();
       await mod.close();

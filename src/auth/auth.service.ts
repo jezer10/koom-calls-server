@@ -6,7 +6,6 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import { UsersRepository } from './users.repository';
 import { UserEntity } from './entities/user.entity';
 import { AuthAuditLogger } from './auth-audit.logger';
@@ -16,6 +15,8 @@ import {
   type OAuthProvider,
   type OAuthProvidersMap,
 } from './providers/oauth-provider.interface';
+import { APP_CONFIG } from '../config/app-config.module';
+import type { AppConfig } from '../config/app.config';
 
 export interface SignInResult {
   token: string;
@@ -40,17 +41,25 @@ export class AuthService {
     @Optional()
     @Inject(OAUTH_PROVIDERS)
     private readonly providers: OAuthProvidersMap | null,
-    private readonly config: ConfigService,
+    @Inject(APP_CONFIG) private readonly appConfig: AppConfig,
   ) {}
 
-  async startOAuth(name: string): Promise<string> {
+  startOAuth(name: string): string {
     const provider = this.getProvider(name);
     if (!provider) {
-      this.audit.log({ event: 'auth.oauth_start', provider: name, reason: 'unknown_provider' });
+      this.audit.log({
+        event: 'auth.oauth_start',
+        provider: name,
+        reason: 'unknown_provider',
+      });
       throw new NotFoundException(`unknown provider: ${name}`);
     }
     if (!provider.meta.enabled) {
-      this.audit.log({ event: 'auth.oauth_start', provider: name, reason: 'provider_disabled' });
+      this.audit.log({
+        event: 'auth.oauth_start',
+        provider: name,
+        reason: 'provider_disabled',
+      });
       throw new NotFoundException(`provider disabled: ${name}`);
     }
     this.audit.log({ event: 'auth.oauth_start', provider: name });
@@ -99,7 +108,10 @@ export class AuthService {
     return { user, token };
   }
 
-  async signInAnonymous(userId: string, displayName: string): Promise<SignInResult> {
+  async signInAnonymous(
+    userId: string,
+    displayName: string,
+  ): Promise<SignInResult> {
     const user = await this.users.upsertByProvider({
       provider: 'anonymous',
       providerSub: userId,
@@ -151,20 +163,12 @@ export class AuthService {
     return this.toProfile(user);
   }
 
-  isAnonymousLoginEnabled(): boolean {
-    const flag = this.config.get<string>('AUTH_ANONYMOUS_LOGIN_ENABLED');
-    if (flag === undefined || flag === null || flag === '') {
-      return this.config.get<string>('NODE_ENV') !== 'production';
-    }
-    return flag === 'true' || flag === '1';
-  }
-
   getFrontendOrigin(): string {
-    return this.config.get<string>('FRONTEND_ORIGIN') ?? '';
+    return this.appConfig.google.frontendOrigin;
   }
 
   isProduction(): boolean {
-    return this.config.get<string>('NODE_ENV') === 'production';
+    return this.appConfig.nodeEnv === 'production';
   }
 
   getCookieSecure(): boolean {

@@ -2,7 +2,11 @@ export interface OAuthProviderMeta {
   name: string;
   displayName: string;
   iconUrl?: string;
-  configKey: string;
+  /**
+   * Env-var name that controls this provider (e.g. `GOOGLE_CLIENT_ID`).
+   * Optional: providers that are always on (e.g. anonymous) leave it unset.
+   */
+  configKey?: string;
   enabled: boolean;
   startUrl?: string;
 }

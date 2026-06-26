@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { SocketIoRedisAdapter } from './socket-io-redis.adapter';
+import { APP_CONFIG } from '../config/app-config.module';
+import type { AppConfig } from '../config/app.config';
 
 export { SocketIoRedisAdapter } from './socket-io-redis.adapter';
 export type { SocketIoRedisAdapterOptions } from './socket-io-redis.adapter';
@@ -9,10 +10,10 @@ export type { SocketIoRedisAdapterOptions } from './socket-io-redis.adapter';
   providers: [
     {
       provide: SocketIoRedisAdapter,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) =>
+      inject: [APP_CONFIG],
+      useFactory: (appConfig: AppConfig) =>
         new SocketIoRedisAdapter(undefined, {
-          redisUrl: configService.get<string>('REDIS_URL') ?? undefined,
+          redisUrl: appConfig.redis.url || undefined,
         }),
     },
   ],

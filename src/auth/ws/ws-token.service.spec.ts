@@ -1,20 +1,34 @@
 import { JwtService } from '@nestjs/jwt';
+/* eslint-disable @typescript-eslint/unbound-method */
 import { WsTokenService } from './ws-token.service';
+
+interface MockJwtPayload {
+  sub: string;
+  ws?: boolean;
+  jti?: string;
+  iat?: number;
+  exp?: number;
+}
 
 function buildJwt() {
   return {
-    sign: jest.fn().mockImplementation((payload: object, opts: { expiresIn?: number }) => {
-      const iat = Math.floor(Date.now() / 1000);
-      const exp = iat + (opts?.expiresIn ?? 60);
-      const body = JSON.stringify({ ...payload, iat, exp });
-      const header = Buffer.from(JSON.stringify({ alg: 'HS256' })).toString('base64url');
-      const sig = 'sig';
-      return `${header}.${Buffer.from(body).toString('base64url')}.${sig}`;
-    }),
-    verify: jest.fn().mockImplementation((token: string) => {
+    sign: jest
+      .fn()
+      .mockImplementation((payload: object, opts: { expiresIn?: number }) => {
+        const iat = Math.floor(Date.now() / 1000);
+        const exp = iat + (opts?.expiresIn ?? 60);
+        const body = JSON.stringify({ ...payload, iat, exp });
+        const header = Buffer.from(JSON.stringify({ alg: 'HS256' })).toString(
+          'base64url',
+        );
+        const sig = 'sig';
+        return `${header}.${Buffer.from(body).toString('base64url')}.${sig}`;
+      }),
+    verify: jest.fn().mockImplementation((token: string): MockJwtPayload => {
       const [, body] = token.split('.');
-      const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf-8'));
-      return payload;
+      return JSON.parse(
+        Buffer.from(body, 'base64url').toString('utf-8'),
+      ) as MockJwtPayload;
     }),
   } as unknown as JwtService;
 }
@@ -28,8 +42,8 @@ describe('WsTokenService', () => {
     svc = new WsTokenService(jwt);
   });
 
-  afterEach(async () => {
-    await svc.onModuleDestroy();
+  afterEach(() => {
+    svc.onModuleDestroy();
   });
 
   it('issue returns a token with ws:true and jti', () => {
@@ -37,7 +51,12 @@ describe('WsTokenService', () => {
     expect(result.token).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
     expect(result.expiresAt).toBeGreaterThan(Date.now());
     expect(jwt.sign).toHaveBeenCalledWith(
-      expect.objectContaining({ sub: 'user-1', ws: true, jti: expect.any(String) }),
+      expect.objectContaining({
+        sub: 'user-1',
+        ws: true,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        jti: expect.any(String),
+      }),
       expect.objectContaining({ expiresIn: 60 }),
     );
   });
@@ -68,13 +87,16 @@ describe('WsTokenService', () => {
     expect(() => svc.consume('x.y.z')).toThrow(/missing jti/);
   });
 
-  it('sweep removes expired jtis', async () => {
+  it('sweep removes expired jtis', () => {
     (jwt.verify as jest.Mock).mockReturnValue({
-      sub: 'u', ws: true, jti: 'old', iat: 0, exp: 1,
+      sub: 'u',
+      ws: true,
+      jti: 'old',
+      iat: 0,
+      exp: 1,
     });
-    const fakeToken = 'x.y.z';
     svc['used'].set('old', 1);
-    await svc['sweep']();
+    svc['sweep']();
     expect(svc['used'].has('old')).toBe(false);
   });
 });

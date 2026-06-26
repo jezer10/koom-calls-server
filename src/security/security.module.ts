@@ -1,5 +1,4 @@
 import { Global, Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { RateLimitService } from './rate-limit.service';
 import {
   parseRateLimitConfig,
@@ -10,6 +9,8 @@ import {
 } from './rate-limit.constants';
 import { WsAuthMiddleware } from './ws-auth.middleware';
 import { AuditLogger } from './audit-logger.service';
+import { APP_CONFIG } from '../config/app-config.module';
+import type { AppConfig } from '../config/app.config';
 
 @Global()
 @Module({
@@ -19,40 +20,24 @@ import { AuditLogger } from './audit-logger.service';
     AuditLogger,
     {
       provide: RATE_LIMIT_CONFIG_TOKEN,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService): RateLimitConfig =>
+      inject: [APP_CONFIG],
+      useFactory: (appConfig: AppConfig): RateLimitConfig =>
         parseRateLimitConfig({
-          RATE_LIMIT_SOCKET_PER_SECOND: configService.getOrThrow<number>(
-            'RATE_LIMIT_SOCKET_PER_SECOND',
-          ),
-          RATE_LIMIT_USER_PER_SECOND: configService.getOrThrow<number>(
-            'RATE_LIMIT_USER_PER_SECOND',
-          ),
-          RATE_LIMIT_IP_PER_SECOND: configService.getOrThrow<number>(
-            'RATE_LIMIT_IP_PER_SECOND',
-          ),
-          RATE_LIMIT_SOCKET_BURST: configService.getOrThrow<number>(
-            'RATE_LIMIT_SOCKET_BURST',
-          ),
-          RATE_LIMIT_USER_BURST: configService.getOrThrow<number>(
-            'RATE_LIMIT_USER_BURST',
-          ),
-          RATE_LIMIT_IP_BURST: configService.getOrThrow<number>(
-            'RATE_LIMIT_IP_BURST',
-          ),
+          RATE_LIMIT_SOCKET_PER_SECOND: appConfig.rateLimit.socketPerSecond,
+          RATE_LIMIT_USER_PER_SECOND: appConfig.rateLimit.userPerSecond,
+          RATE_LIMIT_IP_PER_SECOND: appConfig.rateLimit.ipPerSecond,
+          RATE_LIMIT_SOCKET_BURST: appConfig.rateLimit.socketBurst,
+          RATE_LIMIT_USER_BURST: appConfig.rateLimit.userBurst,
+          RATE_LIMIT_IP_BURST: appConfig.rateLimit.ipBurst,
         }),
     },
     {
       provide: TOKEN_TTL_TOKEN,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService): number =>
+      inject: [APP_CONFIG],
+      useFactory: (appConfig: AppConfig): number =>
         parseTokenTtl({
-          SFU_TOKEN_TTL_SECONDS: configService.get<number>(
-            'SFU_TOKEN_TTL_SECONDS',
-          ),
-          TURN_TOKEN_TTL_SECONDS: configService.get<number>(
-            'TURN_TOKEN_TTL_SECONDS',
-          ),
+          SFU_TOKEN_TTL_SECONDS: appConfig.security.sfuTokenTtlSeconds,
+          TURN_TOKEN_TTL_SECONDS: appConfig.security.turnTokenTtlSeconds,
         }),
     },
   ],

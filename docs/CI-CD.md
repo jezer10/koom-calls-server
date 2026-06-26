@@ -11,28 +11,30 @@
 ```
 PR develop → main
         │
-        ▼
-.github/workflows/docker-publish.yml
-  · build multi-arch (linux/amd64, linux/arm64)
-  · push a ghcr.io/jezer10/koom-calls-server
+        ├─── .github/workflows/ci.yml          (en cada push/PR)
+        │      · pnpm install --frozen-lockfile
+        │      · pnpm lint:check
+        │      · pnpm test  (jest)
+        │      · pnpm build (nest build)
         │
         ▼
-.github/workflows/deploy-vps.yml   (workflow_run, auto)
-  · SSH a la VPS
-  · docker pull
-  · docker run --restart unless-stopped
-  · health check /health
+.github/workflows/deploy.yml           (push a main o manual)
+  · build linux/amd64 + push a ghcr.io/jezer10/koom-calls-server
+  · SSH a la VPS + pull + run + health check
+  (single job, sin cadena workflow_run)
 ```
 
 Imágenes publicadas con tags:
 
 | Tag | Cuándo |
 |---|---|
-| `latest` | push a `main` (default branch) |
-| `main-<sha-corto>` | cada push a `main` |
-| `vX.Y.Z`, `vX.Y` | tag `v*` |
+| `latest` | push a `main` (con `enable=${{ github.ref == 'refs/heads/main' }}`) |
+| `main` | cada push a `main` (branch ref) |
 | `<sha-corto>` | cualquier commit |
-| `pr-<n>` | PR builds (no se despliegan) |
+
+> Configuración mínima intencional: no se publican tags de develop,
+> ni de PR, ni semver. Para versiones formales, tag en `main` y usá
+> `Actions → Deploy to VPS → Run workflow → tag: <sha>`.
 
 ## 2. GitHub Secrets (Settings → Secrets and variables → Actions)
 
@@ -41,14 +43,15 @@ Imágenes publicadas con tags:
 | Secret | Ejemplo | Notas |
 |---|---|---|
 | `VPS_HOST` | `203.0.113.10` o `vps.example.com` | IP pública o dominio |
-| `VPS_USER` | `deploy` | usuario SSH (no root) |
+| `VPS_USER` | `deploy` | usuario SSH (no root, con `docker` group) |
 | `VPS_SSH_KEY` | (clave privada) | la **pública** va en `~/.ssh/authorized_keys` de la VPS |
 | `VPS_PORT` | `22` | opcional, default 22 |
 | `VPS_DEPLOY_DIR_BACK` | `~/koom-calls-server` | opcional, default `~/koom-calls-server` |
 
 ### Auto-proveídos
 
-- `GITHUB_TOKEN` — para `docker/login-action` contra `ghcr.io` y `packages: write`.
+- `GITHUB_TOKEN` — para `docker/login-action` contra `ghcr.io`. Requiere
+  `packages: write` (ya está en `deploy.yml`).
 
 ## 3. Variables en la VPS: `~/koom-calls-server/.env`
 
@@ -61,6 +64,49 @@ openssl rand -base64 48   # → JWT_SECRET
 openssl rand -base64 48   # → TURN_SHARED_SECRET (debe coincidir con coturn)
 openssl rand -base64 32   # → password de Postgres
 ```
+
+### 3.1. Puertos publicados al host (qué abrir en el firewall)
+
+`docker-compose.yml` solo publica dos servicios al host; el resto vive
+en la red `internal` del compose (sin gateway, sin acceso al host ni a
+internet). El `api` y `coturn` son los únicos puntos de contacto con
+el exterior:
+
+| Servicio | Puerto host | Protocolo | Origen permitido | Por qué |
+|---|---|---|---|---|
+| `api` | `8080` | TCP | el front (vía NPM) | HTTP + WebSocket signaling |
+| `coturn` | `3478` | UDP | `0.0.0.0/0` | TURN server: los clientes WebRTC lo contactan para atravesar NAT |
+| `coturn` | `3478` | TCP | `0.0.0.0/0` | TURN over TCP (fallback en redes restrictivas) |
+| `coturn` | `5349` | TCP | `0.0.0.0/0` | TURN over TLS (DTLS) |
+| `coturn` | `49152-49252` | UDP | `0.0.0.0/0` | Rango de relay de medios (mismo `--min-port`/`--max-port` del compose) |
+
+**No se publican al host** (viven en `internal`):
+`postgres:5432`, `redis:6379`, `livekit:7880` (plano de control), `livekit:7881-7882/udp` (plano de medios). El `api` los resuelve por nombre DNS dentro del compose.
+
+### 3.2. Reverse proxy vía Nginx Proxy Manager (mismo VPS)
+
+Si NPM corre en **el mismo VPS** que este stack, el `api` está conectado
+a la red `npm-proxy` y NPM lo alcanza por nombre de contenedor
+(`koom-calls-server:8080`). Configurar un Proxy Host en NPM:
+
+| Campo en NPM | Valor |
+|---|---|
+| Domain Names | `api.tu-dominio.com` |
+| Scheme | `http` |
+| Forward Hostname / IP | `koom-calls-server` (nombre del contenedor) |
+| Forward Port | `8080` |
+| Websockets Support | **ON** (LiveKit signaling + Socket.IO) |
+| Cache Assets | OFF |
+| Force SSL | ON (NEM pide cert Let's Encrypt desde la UI) |
+| HSTS | ON |
+
+El `8080/tcp` queda en `0.0.0.0` para que (a) NPM lo alcance por
+nombre dentro de `npm-proxy`, y (b) vos puedas hacer
+`curl http://localhost:8080/health` desde el host para debug.
+
+**`coturn` no entra en NPM** — TURN usa UDP, ningún reverse proxy HTTP
+lo soporta. Sus puertos siguen publicándose al host directo y deben
+estar abiertos en el firewall del VPS.
 
 | Variable | Requerida prod | Default dev | Notas |
 |---|---|---|---|
@@ -102,29 +148,30 @@ ssh deploy@VPS_HOST
 mkdir -p ~/koom-calls-server && cd ~/koom-calls-server
 
 # 2. .env (copiar de .env.example.docker y rellenar secretos reales)
+scp back/.env.example.docker deploy@VPS_HOST:~/koom-calls-server/.env
+ssh deploy@VPS_HOST "nano ~/koom-calls-server/.env"
 
-# 3. (Opcional) Prueba manual ANTES del primer deploy automático:
+# 3. (Opcional) Smoke test ANTES del primer deploy automático:
 docker pull ghcr.io/jezer10/koom-calls-server:latest
 docker run -d --name koom-calls-server-test \
   --env-file .env -p 8080:8080 \
   ghcr.io/jezer10/koom-calls-server:latest
 curl -fsS http://localhost:8080/health
 docker rm -f koom-calls-server-test
-
-# 4. La red koom-net se crea automáticamente en el primer deploy vía SSH
 ```
 
 ## 5. Procedimiento de release
 
 ```bash
 # 1. PR de develop → main en koom-calls-server
-# 2. Merge. Se disparan en orden:
-#    a. docker-publish.yml → build + push a ghcr.io
-#    b. deploy-vps.yml       → SSH + pull + restart
-# 3. Verificar en la VPS:
+# 2. CI corre y debe pasar (gate de calidad).
+# 3. Merge. Se dispara:
+#    a. deploy.yml           → build + push + SSH + pull + restart + health check
+# 4. Verificar en la VPS:
 ssh deploy@VPS_HOST "docker ps && curl -fsS http://localhost:8080/health"
-# 4. (Opcional) Tag semver:
+# 5. (Opcional) Tag formal para auditoría / rollback:
 git tag v1.0.0 main && git push --tags
+# (El tag no dispara deploy — solo crea un alias en git).
 ```
 
 ## 6. Deploy manual (rollback / hotfix)
@@ -132,20 +179,20 @@ git tag v1.0.0 main && git push --tags
 Repo → Actions → "Deploy to VPS" → Run workflow.
 
 - **Default tag:** `latest` (más reciente publicado en GHCR).
-- **Tag específico:** pegar `main-abc1234` o `v1.0.0` en el input "tag".
+- **Tag específico:** pegar `main-abc1234` o `v1.0.0` en el input `tag`.
 
 ## 7. Rollback de emergencia vía SSH
 
 ```bash
 ssh deploy@VPS_HOST
+cd ~/koom-calls-server
 docker pull ghcr.io/jezer10/koom-calls-server:main-<sha-anterior>
 docker rm -f koom-calls-server
 docker run -d \
   --name koom-calls-server \
   --restart unless-stopped \
-  --network koom-net \
   -p 8080:8080 \
-  --env-file ~/koom-calls-server/.env \
+  --env-file .env \
   ghcr.io/jezer10/koom-calls-server:main-<sha-anterior>
 
 # Verificar
@@ -156,29 +203,61 @@ docker logs --tail 100 koom-calls-server
 
 ## 8. Workflows
 
-### `.github/workflows/docker-publish.yml`
+### `.github/workflows/ci.yml`
 
-- Trigger: push a `main`, tag `v*`, manual.
-- Build: docker buildx multi-arch (linux/amd64 + linux/arm64), GHA cache.
-- Push: `ghcr.io/jezer10/koom-calls-server` con tags según `docker/metadata-action`.
-- Permisos: `contents: read`, `packages: write`.
+- Trigger: `pull_request` a `main`/`develop`, `push` a `main`/`develop`,
+  manual (`workflow_dispatch`).
+- `paths-ignore`: `docs/**`, `*.md` (no corre por cambios solo de docs).
+- `concurrency: ci-…-${{ pr.number || ref }}` con
+  `cancel-in-progress: ${{ event_name == 'pull_request' }}`.
+  Un force-push sobre la misma PR cancela el run anterior; los pushes a
+  `main`/`develop` no se cancelan entre sí (dejan terminar para audit).
+- `permissions: contents: read` (principio de menor privilegio).
+- Job `ci` (`ubuntu-latest`, `timeout-minutes: 15`):
+  1. `actions/checkout@v4`
+  2. `actions/setup-node@v4` con `node-version: 22` y `cache: pnpm`
+     (cachea el store de pnpm por hash de `pnpm-lock.yaml`).
+  3. `corepack enable` — garantiza la versión de pnpm declarada en
+     `packageManager` (`11.5.2`).
+  4. `pnpm install --frozen-lockfile` — falla si el lockfile está
+     desincronizado.
+  5. `pnpm lint:check` — eslint, falla en cualquier error.
+  6. `pnpm test` — jest.
+  7. `pnpm build` — `nest build` (type-check de TS).
+- Tiempo esperado de punta a punta: ~1 min cacheado, ~3 min en frío.
+- **Branch protection (acción manual):** en GitHub UI →
+  Settings → Branches → `main` y `develop` → Require status checks →
+  seleccionar `Lint, test, build` como required. Sin esto el check es
+  solo informativo y no bloquea merges rotos.
 
-### `.github/workflows/deploy-vps.yml`
+### `.github/workflows/deploy.yml`
 
-- Trigger: tras `workflow_run` exitoso de docker-publish, o manual.
-- `concurrency: deploy-koom-calls-server` — cancela runs concurrentes.
+- Trigger: push a `main`, manual con input `tag` (default `latest`).
+- `concurrency: deploy-<repo>` con `cancel-in-progress: true`.
+- `environment: production` (GitHub Environments) — opcionalmente con
+  reviewers requeridos en la UI.
+- `permissions: contents: read, packages: write`.
 - Steps:
-  1. Determina tag (input manual o `latest`).
-  2. `appleboy/ssh-action@v1` con secretos VPS.
-  3. Script remoto:
-     - Valida `.env` existe.
-     - `docker login ghcr.io`.
-     - `docker pull` de la imagen.
+  1. Checkout + `docker/setup-buildx-action@v3` + `docker/login-action@v3`
+     contra `ghcr.io` con `GITHUB_TOKEN`.
+  2. `docker/metadata-action@v5` con tags:
+     - `main` (branch ref)
+     - `<short-sha>`
+     - `latest` (solo si `github.ref == 'refs/heads/main'`)
+  3. `docker/build-push-action@v6` con `platforms: linux/amd64`,
+     GHA cache `mode=min`, push a `ghcr.io/jezer10/koom-calls-server`.
+  4. `appleboy/ssh-action@v1` con secretos VPS.
+  5. Script remoto (`set -euo pipefail`):
+     - `cd $DEPLOY_DIR` (default `~/koom-calls-server`).
+     - **Hard-fail si falta `.env`** (no hay input para saltearlo).
+     - `docker login ghcr.io` con `GITHUB_TOKEN`.
+     - `docker pull <image>`.
      - `docker rm -f koom-calls-server` (best-effort).
-     - Crea red `kooom-net` si no existe.
-     - `docker run -d --restart unless-stopped --network koom-net -p 8080:8080 --env-file .env <image>`.
-     - Loop de health check hasta 30s.
+     - `docker run -d --restart unless-stopped -p 8080:8080 --env-file .env <image>`.
+     - Loop de health check hasta 20s.
      - Falla con `docker logs --tail 50` si no sana.
+- **Single-arch intencional:** la VPS es x86. Para añadir `linux/arm64`,
+  cambiar `platforms:` en el workflow.
 
 ## 9. Verificación end-to-end
 
@@ -203,11 +282,12 @@ curl -fsS -H "Authorization: Bearer $TOKEN" \
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| `JWT_SECRET is required in production` | Falta o vacío en `NODE_ENV=production` | Setear con `openssl rand -base64 48` |
+| `JWT_SECRET is required in production` | Falta o vacío en `NODE_ENV=production` | Setear con `openssl rand -base64 48` en la VPS |
 | `TURN_URL is required in production` | Igual | Setear con URL del servidor coturn |
 | `Could not find module 'X'` | `pnpm install` falló en la build | Revisar logs de la action, re-disparar |
-| Health check falla 30s | La imagen crashea o no escucha | `docker logs koom-calls-server` en VPS |
+| Health check falla 20s | La imagen crashea o no escucha | `docker logs koom-calls-server` en la VPS |
 | `unauthorized` en socket.io | Secret del middleware WS ≠ del firmador | El middleware usa `process.env.JWT_SECRET`, mismo que el firmador |
 | `permission denied` en `docker login` | `GITHUB_TOKEN` expiró o sin scopes | Re-disparar la action, el token se regenera |
 | Socket.IO no recibe eventos entre instancias | Falta `REDIS_URL` | Setear `REDIS_URL=redis://...` y redeploy |
-| Front no conecta al back | `VITE_API_BASE_URL` apunta a localhost o ruta incorrecta | Re-disparar publish con el secret correcto, redeploy front |
+| Front no conecta al back | `VITE_API_BASE_URL` del front apunta a localhost o ruta incorrecta | Corregir secret en el repo del front, re-disparar publish + deploy del front |
+| Deploy falla con `Falta ~/koom-calls-server/.env` | `.env` no existe en la VPS | Copiá `back/.env.example.docker` a `~/koom-calls-server/.env` en la VPS, editá los secretos, y re-dispará el workflow |

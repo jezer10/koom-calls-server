@@ -1,5 +1,4 @@
 import { Controller, Get, HttpCode, Logger, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Inject, type OnModuleInit } from '@nestjs/common';
 import {
   MEDIA_PROVIDER,
@@ -7,16 +6,11 @@ import {
   type MediaProviderRole,
 } from './media-provider.interface';
 import {
-  LIVEKIT_API_KEY_ENV,
-  LIVEKIT_API_SECRET_ENV,
-  LIVEKIT_HTTP_URL_ENV,
-  LIVEKIT_URL_ENV,
-  readMediaProviderEnv,
-} from './media-provider.module';
-import {
   createLiveKitClient,
   type LiveKitClientBundle,
 } from './livekit.client';
+import { LIVEKIT_CONFIG } from '../config/app-config.module';
+import type { LiveKitConfig } from '../config/app.config';
 
 interface LiveKitHealth {
   provider: 'livekit' | 'noop';
@@ -55,31 +49,21 @@ interface LiveKitHealth {
 @Controller('info/livekit')
 export class LiveKitHealthController implements OnModuleInit {
   private readonly logger = new Logger(LiveKitHealthController.name);
-  private readonly env: ReturnType<typeof readMediaProviderEnv>;
   private directClient: LiveKitClientBundle | undefined;
 
   constructor(
-    private readonly configService: ConfigService,
+    @Inject(LIVEKIT_CONFIG) private readonly livekit: LiveKitConfig,
     @Optional()
     @Inject(MEDIA_PROVIDER)
     private readonly provider?: MediaProvider,
-  ) {
-    this.env = readMediaProviderEnv({
-      LIVEKIT_URL: this.configService.get<string>(LIVEKIT_URL_ENV),
-      LIVEKIT_API_KEY: this.configService.get<string>(LIVEKIT_API_KEY_ENV),
-      LIVEKIT_API_SECRET: this.configService.get<string>(
-        LIVEKIT_API_SECRET_ENV,
-      ),
-      LIVEKIT_HTTP_URL: this.configService.get<string>(LIVEKIT_HTTP_URL_ENV),
-    });
-  }
+  ) {}
 
   onModuleInit(): void {
-    if (this.env.httpUrl && this.env.apiKey && this.env.apiSecret) {
+    if (this.livekit.httpUrl && this.livekit.apiKey && this.livekit.apiSecret) {
       this.directClient = createLiveKitClient({
-        url: this.env.httpUrl,
-        apiKey: this.env.apiKey,
-        apiSecret: this.env.apiSecret,
+        url: this.livekit.httpUrl,
+        apiKey: this.livekit.apiKey,
+        apiSecret: this.livekit.apiSecret,
       });
     }
   }
@@ -87,15 +71,15 @@ export class LiveKitHealthController implements OnModuleInit {
   @Get()
   @HttpCode(200)
   async getHealth(): Promise<LiveKitHealth> {
-    const providerName: 'livekit' | 'noop' = this.env.url ? 'livekit' : 'noop';
+    const configured = Boolean(
+      this.livekit.url && this.livekit.apiKey && this.livekit.apiSecret,
+    );
     const base: LiveKitHealth = {
-      provider: providerName,
-      configured: Boolean(
-        this.env.url && this.env.apiKey && this.env.apiSecret,
-      ),
-      url: this.env.url,
-      httpUrl: this.env.httpUrl,
-      apiKey: this.env.apiKey,
+      provider: this.livekit.url ? 'livekit' : 'noop',
+      configured,
+      url: this.livekit.url || undefined,
+      httpUrl: this.livekit.httpUrl || undefined,
+      apiKey: this.livekit.apiKey || undefined,
       checks: {
         accessToken: { ok: false },
         room: { ok: false },
