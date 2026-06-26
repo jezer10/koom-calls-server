@@ -1,5 +1,4 @@
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { AuthService } from './auth.service';
@@ -53,7 +52,8 @@ function buildSvc(
     upsertImpl?: UsersRepository['upsertByProvider'];
     findByIdImpl?: UsersRepository['findById'];
     signImpl?: JwtService['sign'];
-    configValues?: Record<string, string | undefined>;
+    frontendOrigin?: string;
+    nodeEnv?: string;
   } = {},
 ) {
   const users = {
@@ -65,11 +65,12 @@ function buildSvc(
   } as unknown as JwtService;
   const audit = { log: jest.fn() } as unknown as AuthAuditLogger;
   const providers = opts.providers ?? null;
-  const config = {
-    get: (k: string) => opts.configValues?.[k],
-  } as unknown as ConfigService;
-  const svc = new AuthService(users, jwt, audit, providers, config);
-  return { svc, users, jwt, audit, providers, config };
+  const appConfig = {
+    google: { frontendOrigin: opts.frontendOrigin ?? '' },
+    nodeEnv: opts.nodeEnv ?? 'test',
+  } as import('../config/app.config').AppConfig;
+  const svc = new AuthService(users, jwt, audit, providers, appConfig);
+  return { svc, users, jwt, audit, providers };
 }
 
 describe('AuthService', () => {
@@ -213,19 +214,19 @@ describe('AuthService', () => {
   describe('getFrontendOrigin / getCookieSecure / isProduction', () => {
     it('returns FRONTEND_ORIGIN', () => {
       const { svc } = buildSvc({
-        configValues: { FRONTEND_ORIGIN: 'https://app.example.com' },
+        frontendOrigin: 'https://app.example.com',
       });
       expect(svc.getFrontendOrigin()).toBe('https://app.example.com');
     });
 
     it('returns cookie secure when production', () => {
-      const { svc } = buildSvc({ configValues: { NODE_ENV: 'production' } });
+      const { svc } = buildSvc({ nodeEnv: 'production' });
       expect(svc.getCookieSecure()).toBe(true);
       expect(svc.isProduction()).toBe(true);
     });
 
     it('returns cookie insecure when not production', () => {
-      const { svc } = buildSvc({ configValues: { NODE_ENV: 'development' } });
+      const { svc } = buildSvc({ nodeEnv: 'development' });
       expect(svc.getCookieSecure()).toBe(false);
       expect(svc.isProduction()).toBe(false);
     });

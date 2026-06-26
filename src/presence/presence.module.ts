@@ -1,21 +1,20 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InMemoryPresenceService } from './in-memory-presence.service';
 import { PRESENCE_SERVICE } from './presence.tokens';
 import type { PresenceService } from './presence.service';
 import { createRedisClient } from './redis.client';
 import { RedisPresenceService } from './redis-presence.service';
+import { APP_CONFIG } from '../config/app-config.module';
+import type { AppConfig } from '../config/app.config';
 
 @Module({
   providers: [
     {
       provide: PRESENCE_SERVICE,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService): PresenceService => {
-        const url = configService.get<string>('REDIS_URL') ?? '';
-        const defaultTtl = configService.getOrThrow<number>(
-          'PRESENCE_TTL_SECONDS',
-        );
+      inject: [APP_CONFIG],
+      useFactory: (appConfig: AppConfig): PresenceService => {
+        const url = appConfig.redis.url;
+        const defaultTtl = appConfig.presence.ttlSeconds;
         if (url.trim() === '') {
           return new InMemoryPresenceService(defaultTtl);
         }

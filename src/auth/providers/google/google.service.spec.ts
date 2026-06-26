@@ -1,6 +1,6 @@
-import { ConfigService } from '@nestjs/config';
 import { GoogleService } from './google.service';
 import type { TokenPayload } from 'google-auth-library';
+import type { GoogleConfig } from '../../../config/app.config';
 
 function buildPayload(overrides: Partial<TokenPayload> = {}): TokenPayload {
   const now = Math.floor(Date.now() / 1000);
@@ -34,15 +34,13 @@ describe('GoogleService', () => {
     secret?: string,
     redirect?: string,
   ): GoogleService => {
-    const config = {
-      get: (key: string) => {
-        if (key === 'GOOGLE_CLIENT_ID') return id;
-        if (key === 'GOOGLE_CLIENT_SECRET') return secret;
-        if (key === 'GOOGLE_REDIRECT_URI') return redirect;
-        return undefined;
-      },
-    } as unknown as ConfigService;
-    const s = new GoogleService(config);
+    const googleConfig: GoogleConfig = {
+      clientId: id ?? '',
+      clientSecret: secret ?? '',
+      redirectUri: redirect ?? '',
+      frontendOrigin: '',
+    };
+    const s = new GoogleService(googleConfig);
     if (id && secret && redirect) {
       s.onModuleInit();
       mockClient = {

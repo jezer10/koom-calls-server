@@ -23,6 +23,7 @@ import {
   SocketIoRedisAdapter,
 } from './signaling/signaling.adapter.module';
 import { parseEnv } from './config/env.schema';
+import { AppConfigModule } from './config/app-config.module';
 
 export { SocketIoRedisAdapter };
 
@@ -36,6 +37,7 @@ function isSqlite(url: string): boolean {
       isGlobal: true,
       validate: (env) => parseEnv(env, { onWarning: console.warn }),
     }),
+    AppConfigModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => {

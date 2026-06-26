@@ -19,6 +19,8 @@ import {
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { WsTokenService } from './ws/ws-token.service';
+import { APP_CONFIG } from '../config/app-config.module';
+import type { AppConfig } from '../config/app.config';
 
 class StubJwtAuthGuard {
   canActivate(ctx: {
@@ -103,15 +105,15 @@ describe('AuthController (HTTP)', () => {
       findById: jest.fn().mockResolvedValue(makeUser()),
     };
 
-    const configGet: Record<string, string> = {
-      FRONTEND_ORIGIN: opts.frontend ?? FRONTEND,
-      JWT_SECRET: 'test-secret',
-    };
-    const config = {
-      get: (k: string) => configGet[k],
+    const appConfig = {
+      google: { frontendOrigin: opts.frontend ?? FRONTEND },
+      nodeEnv: 'test',
+    } as AppConfig;
+    const configService = {
+      get: (k: string) => (k === 'JWT_SECRET' ? 'test-secret' : undefined),
       getOrThrow: (k: string) => {
-        if (!configGet[k]) throw new Error(`missing ${k}`);
-        return configGet[k];
+        if (k === 'JWT_SECRET') return 'test-secret';
+        throw new Error(`missing ${k}`);
       },
     } as unknown as ConfigService;
 
@@ -138,7 +140,8 @@ describe('AuthController (HTTP)', () => {
             sign: (payload: object) => `signed.${JSON.stringify(payload)}`,
           },
         },
-        { provide: ConfigService, useValue: config },
+        { provide: APP_CONFIG, useValue: appConfig },
+        { provide: ConfigService, useValue: configService },
         OAuthProvidersRegistry,
         { provide: OAUTH_PROVIDERS, useValue: providers },
         WsTokenService,
