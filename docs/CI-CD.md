@@ -55,7 +55,8 @@ Imágenes publicadas con tags:
 
 ## 3. Variables en la VPS: `~/koom-calls-server/.env`
 
-Copia `back/.env.example.docker` a `~/koom-calls-server/.env` en la VPS y rellena.
+Copia `back/.env.example` a `~/koom-calls-server/.env` en la VPS y rellena los
+valores del servidor.
 
 Genera secretos con:
 
@@ -131,12 +132,12 @@ estar abiertos en el firewall del VPS.
 | `TURN_TOKEN_TTL_SECONDS`       | opcional        | 3600                                      |                                                         |
 | `LOG_LEVEL`                    | opcional        | info                                      | pino: trace/debug/info/warn/error                       |
 | `PRESENCE_TTL_SECONDS`         | opcional        | 60                                        |                                                         |
-| `RATE_LIMIT_SOCKET_BURST`      | opcional        | 30                                        |                                                         |
-| `RATE_LIMIT_SOCKET_PER_SECOND` | opcional        | 30                                        |                                                         |
-| `RATE_LIMIT_USER_BURST`        | opcional        | 100                                       |                                                         |
-| `RATE_LIMIT_USER_PER_SECOND`   | opcional        | 100                                       |                                                         |
-| `RATE_LIMIT_IP_BURST`          | opcional        | 200                                       |                                                         |
-| `RATE_LIMIT_IP_PER_SECOND`     | opcional        | 200                                       |                                                         |
+| `RATE_LIMIT_SOCKET_BURST`      | opcional        | 5                                         |                                                         |
+| `RATE_LIMIT_SOCKET_PER_SECOND` | opcional        | 20                                        |                                                         |
+| `RATE_LIMIT_USER_BURST`        | opcional        | 3                                         |                                                         |
+| `RATE_LIMIT_USER_PER_SECOND`   | opcional        | 10                                        |                                                         |
+| `RATE_LIMIT_IP_BURST`          | opcional        | 8                                         |                                                         |
+| `RATE_LIMIT_IP_PER_SECOND`     | opcional        | 30                                        |                                                         |
 | `SIGNALING_NAMESPACE`          | opcional        | `/signaling`                              |                                                         |
 
 ## 4. Setup inicial en la VPS (una sola vez)
@@ -147,8 +148,8 @@ ssh deploy@VPS_HOST
 # 1. Directorio de deploy
 mkdir -p ~/koom-calls-server && cd ~/koom-calls-server
 
-# 2. .env (copiar de .env.example.docker y rellenar secretos reales)
-scp back/.env.example.docker deploy@VPS_HOST:~/koom-calls-server/.env
+# 2. .env (copiar de .env.example y rellenar valores reales del servidor)
+scp back/.env.example deploy@VPS_HOST:~/koom-calls-server/.env
 ssh deploy@VPS_HOST "nano ~/koom-calls-server/.env"
 
 # 3. (Opcional) Smoke test ANTES del primer deploy automático:
@@ -290,4 +291,4 @@ curl -fsS -H "Authorization: Bearer $TOKEN" \
 | `permission denied` en `docker login`             | `GITHUB_TOKEN` expiró o sin scopes                                 | Re-disparar la action, el token se regenera                                                                           |
 | Socket.IO no recibe eventos entre instancias      | Falta `REDIS_URL`                                                  | Setear `REDIS_URL=redis://...` y redeploy                                                                             |
 | Front no conecta al back                          | `VITE_API_BASE_URL` del front apunta a localhost o ruta incorrecta | Corregir secret en el repo del front, re-disparar publish + deploy del front                                          |
-| Deploy falla con `Falta ~/koom-calls-server/.env` | `.env` no existe en la VPS                                         | Copiá `back/.env.example.docker` a `~/koom-calls-server/.env` en la VPS, editá los secretos, y re-dispará el workflow |
+| Deploy falla con `Falta ~/koom-calls-server/.env` | `.env` no existe en la VPS                                         | Copiá `back/.env.example` a `~/koom-calls-server/.env` en la VPS, ajustá los valores del servidor, y re-dispará el workflow |
