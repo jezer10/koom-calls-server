@@ -3,8 +3,6 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { buildAppConfig } from '../src/config/app.config';
-import { parseEnv } from '../src/config/env.schema';
 
 interface InfoResponse {
   name: string;
@@ -21,7 +19,7 @@ interface HealthResponse {
 
 describe('REST endpoints (e2e)', () => {
   let app: INestApplication;
-  const config = buildAppConfig(parseEnv(process.env), process.env);
+  const corsOrigin = process.env.CORS_ORIGIN ?? '*';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -30,7 +28,7 @@ describe('REST endpoints (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.enableCors({
-      origin: config.signaling.corsOrigin,
+      origin: corsOrigin,
       credentials: true,
     });
     await app.init();

@@ -1,31 +1,62 @@
 import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { bootstrap } from './main';
-import type { AppConfig } from './config/app.config';
+import { ConfigService } from '@nestjs/config';
 
 describe('bootstrap()', () => {
+  let bootstrap: () => Promise<void>;
   let logSpy: jest.SpyInstance;
-  let createSpy: jest.SpyInstance;
   let listenSpy: jest.Mock;
+  let fakeApp: {
+    listen: jest.Mock;
+    get: jest.Mock;
+    useWebSocketAdapter: jest.Mock;
+    enableCors: jest.Mock;
+    use: jest.Mock;
+    setGlobalPrefix: jest.Mock;
+  };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    jest.resetModules();
+    process.env.DATABASE_URL =
+      process.env.DATABASE_URL ?? 'postgres://koom:koom@localhost:5432/koom_test';
+    process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'dev-jwt-secret';
+    process.env.TURN_SHARED_SECRET =
+      process.env.TURN_SHARED_SECRET ?? 'dev-turn-secret';
     listenSpy = jest.fn().mockResolvedValue(undefined);
-    const fakeAppConfig: Partial<AppConfig> = {
-      httpPort: 8080,
-      signaling: { namespace: '/signaling', corsOrigin: '*' },
-      redis: { url: '' },
-    };
-    const fakeApp = {
+    const fakeConfigService = {
+      get: (key: string) => {
+        if (key === 'app.corsOrigin') return '*';
+        if (key === 'redis.url') return '';
+        return undefined;
+      },
+      getOrThrow: (key: string) => {
+        if (key === 'app.port') return 8080;
+        if (key === 'signaling.namespace') return '/signaling';
+        throw new Error(`unexpected key ${key}`);
+      },
+    } as unknown as ConfigService;
+    fakeApp = {
       listen: listenSpy,
-      get: jest.fn().mockReturnValue(fakeAppConfig),
+      get: jest.fn().mockReturnValue(fakeConfigService),
       useWebSocketAdapter: jest.fn(),
       enableCors: jest.fn(),
       use: jest.fn(),
       setGlobalPrefix: jest.fn(),
     };
-    createSpy = jest
-      .spyOn(NestFactory, 'create')
-      .mockResolvedValue(fakeApp as never);
+    jest.doMock('./app.module', () => ({
+      AppModule: class AppModule {},
+      SocketIoRedisAdapter: class SocketIoRedisAdapter {
+        constructor(
+          public readonly app: unknown,
+          public readonly options: unknown,
+        ) {}
+      },
+    }));
+    jest.doMock('@nestjs/core', () => ({
+      NestFactory: {
+        create: jest.fn().mockResolvedValue(fakeApp),
+      },
+    }));
+    bootstrap = (require('./main') as typeof import('./main')).bootstrap;
     logSpy = jest
       .spyOn(Logger.prototype, 'log')
       .mockImplementation(() => undefined);
@@ -34,17 +65,14 @@ describe('bootstrap()', () => {
   });
 
   afterEach(() => {
-    logSpy.mockRestore();
-    createSpy.mockRestore();
+    logSpy?.mockRestore();
     jest.restoreAllMocks();
   });
 
-  it('logs the signaling server banner', async () => {
+  it('bootstraps the server with the configured port and ws adapter', async () => {
     await bootstrap();
-    const all = logSpy.mock.calls
-      .map((c: unknown[]) => String(c[0]))
-      .join('\n');
-    expect(all).toContain('Signaling server listening');
-    expect(all).toContain('Socket.IO signaling');
+    expect(fakeApp.enableCors).toHaveBeenCalled();
+    expect(fakeApp.useWebSocketAdapter).toHaveBeenCalledTimes(1);
+    expect(listenSpy).toHaveBeenCalledWith(8080);
   });
 });

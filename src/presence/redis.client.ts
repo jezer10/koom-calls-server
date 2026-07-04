@@ -33,3 +33,25 @@ export function createRedisClient(
 
   return client;
 }
+
+export async function canConnectRedis(url: string): Promise<boolean> {
+  const client = new Redis(url, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: true,
+  });
+
+  try {
+    await client.connect();
+    await client.ping();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      await client.quit();
+    } catch {
+      client.disconnect();
+    }
+  }
+}

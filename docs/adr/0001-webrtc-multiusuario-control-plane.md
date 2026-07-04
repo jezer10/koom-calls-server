@@ -47,14 +47,14 @@ notificaciones.
 
 ### Componentes
 
-| Componente             | Rol                                                                                    | Entorno                                        |
-| ---------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| **NestJS 11**          | Plano de control: HTTP, WebSocket de señalización, máquina de estados, JWT.            | Railway, multi-instancia                       |
-| **LiveKit (SFU)**      | Plano de medios: server WebRTC, simulcast, server-side recording, egress.              | LiveKit Cloud en staging; self-hostable en M3+ |
-| **coturn**             | Servidor TURN/STUN compartido para NAT simétrico.                                      | Railway/VM dedicado                            |
-| **Redis**              | Pub/sub entre instancias Nest, presence/online, cache de credenciales TURN efímeras.   | Upstash en dev/staging; self-hosted en prod    |
-| **Postgres / SQLite**  | Persistencia de usuarios, salas, claims, eventos, auditoría.                           | SQLite in-memory en M1; Postgres desde M2      |
-| **SPA cliente (web)**  | Browser SDK: `livekit-client` para medios + Socket.IO cliente para señalización Koom.  | Build estática, misma que ya existe            |
+| Componente            | Rol                                                                                   | Entorno                                        |
+| --------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **NestJS 11**         | Plano de control: HTTP, WebSocket de señalización, máquina de estados, JWT.           | Railway, multi-instancia                       |
+| **LiveKit (SFU)**     | Plano de medios: server WebRTC, simulcast, server-side recording, egress.             | LiveKit Cloud en staging; self-hostable en M3+ |
+| **coturn**            | Servidor TURN/STUN compartido para NAT simétrico.                                     | Railway/VM dedicado                            |
+| **Redis**             | Pub/sub entre instancias Nest, presence/online, cache de credenciales TURN efímeras.  | Upstash en dev/staging; self-hosted en prod    |
+| **Postgres / SQLite** | Persistencia de usuarios, salas, claims, eventos, auditoría.                          | SQLite in-memory en M1; Postgres desde M2      |
+| **SPA cliente (web)** | Browser SDK: `livekit-client` para medios + Socket.IO cliente para señalización Koom. | Build estática, misma que ya existe            |
 
 ### Topología lógica
 
@@ -116,7 +116,7 @@ notificaciones.
 ### Hitos del producto (LBR-66/68/69)
 
 - **LBR-66 — ADR + contrato de configuración.** Este documento y el
-  esquema `env.schema.ts` con `zod`. Fija la superficie de variables y
+  esquema `env.schema.ts` con `Joi`. Fija la superficie de variables y
   el shape de `AppConfig.env`. Las variables retiradas del flujo legacy
   (PeerJS) ya no aparecen en el validador.
 - **LBR-68 — Persistencia con TypeORM (M1).** Entidades `User`, `Room`,
@@ -157,11 +157,11 @@ y M4 (observability) se detallan en futuros ADRs.
   self-host). Mitigación: en M1 sólo Redis es necesario; coturn llega
   con M2. Se documenta en `docs/adr/` y en el runbook.
 - **Más configuración.** El archivo `.env.example` crece. Se compensa
-  con el validador `zod` (LBR-66) que detecta errores en boot.
+  con el validador `Joi` (LBR-66) que detecta errores en boot.
 
 ### Neutras / de operación
 
-- Se introduce `zod` como dependencia de runtime para validación de
+- Se introduce `Joi` como dependencia de runtime para validación de
   configuración. No se añade `class-validator` (decisión de scope).
 - El contrato `AppConfig` se amplía con un campo `env: ParsedEnv`. Esto
   es retrocompatible: los campos existentes (`httpPort`,
@@ -260,7 +260,7 @@ y M4 (observability) se detallan en futuros ADRs.
   su gateway entiende el nuevo modelo de eventos (`room:join`,
   `room:leave`, `participant:update`).
 - `AppConfig` extiende con un campo `env: ParsedEnv` poblado por
-  `parseEnv(process.env)` en el boot. `parseEnv` valida con `zod` y,
+  validación central en el boot. `Joi` valida y,
   en desarrollo, auto-genera un `JWT_SECRET` emitiendo un warning.
 - El validador `env.schema.ts` ya no expone variables del flujo legacy
   (PeerJS). Cualquier despliegue que aún las enviaba debe eliminarlas

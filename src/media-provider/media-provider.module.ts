@@ -1,17 +1,17 @@
 import {
   Global,
-  Inject,
+  Injectable,
   Logger,
   Module,
   type OnApplicationBootstrap,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MEDIA_PROVIDER, type MediaProvider } from './media-provider.interface';
 import { LiveKitMediaProvider } from './livekit.media-provider';
 import { NoopMediaProvider } from './noop.media-provider';
 import { createLiveKitClient } from './livekit.client';
 import { LiveKitHealthController } from './livekit-health.controller';
-import { LIVEKIT_CONFIG } from '../config/app-config.module';
-import type { LiveKitConfig } from '../config/app.config';
+import { deriveHttpUrl } from '../config/livekit.config';
 
 export const LIVEKIT_URL_ENV = 'LIVEKIT_URL';
 export const LIVEKIT_API_KEY_ENV = 'LIVEKIT_API_KEY';
@@ -25,15 +25,6 @@ export interface MediaProviderEnv {
   apiSecret?: string;
 }
 
-export function deriveHttpUrl(wsUrl: string | undefined): string | undefined {
-  if (!wsUrl) return undefined;
-  if (wsUrl.startsWith('http://') || wsUrl.startsWith('https://')) return wsUrl;
-  if (wsUrl.startsWith('ws://')) return `http://${wsUrl.slice('ws://'.length)}`;
-  if (wsUrl.startsWith('wss://'))
-    return `https://${wsUrl.slice('wss://'.length)}`;
-  return wsUrl;
-}
-
 export function readMediaProviderEnv(
   source: Partial<
     Record<
@@ -45,7 +36,7 @@ export function readMediaProviderEnv(
     >
   > = {},
 ): MediaProviderEnv {
-  const url = source.LIVEKIT_URL;
+  const url = source.LIVEKIT_URL ?? '';
   const apiKey = source.LIVEKIT_API_KEY;
   const apiSecret = source.LIVEKIT_API_SECRET;
   const httpUrl = source.LIVEKIT_HTTP_URL || deriveHttpUrl(url);
@@ -68,40 +59,50 @@ export function selectMediaProvider(env: MediaProviderEnv): MediaProvider {
   return new NoopMediaProvider();
 }
 
+@Injectable()
+class MediaProviderBootstrapLogger implements OnApplicationBootstrap {
+  private readonly logger = new Logger(MediaProviderModule.name);
+
+  constructor(private readonly configService: ConfigService) {}
+
+  onApplicationBootstrap(): void {
+    const url = this.configService.get<string>('livekit.url') ?? '';
+    const apiKey = this.configService.get<string>('livekit.apiKey') ?? '';
+    const apiSecret = this.configService.get<string>('livekit.apiSecret') ?? '';
+    const httpUrl =
+      this.configService.get<string>('livekit.httpUrl') || deriveHttpUrl(url);
+
+    if (url && apiKey && apiSecret) {
+      this.logger.log(
+        `MediaProvider: LiveKit (url=${url}, httpUrl=${httpUrl}, key=${apiKey})`,
+      );
+      return;
+    }
+    this.logger.warn(
+      'MediaProvider: Noop (LIVEKIT_URL/LIVEKIT_API_KEY/LIVEKIT_API_SECRET not all set)',
+    );
+  }
+}
+
 @Global()
 @Module({
   controllers: [LiveKitHealthController],
   providers: [
     {
       provide: MEDIA_PROVIDER,
-      inject: [LIVEKIT_CONFIG],
-      useFactory: (livekit: LiveKitConfig): MediaProvider =>
-        selectMediaProvider({
-          url: livekit.url || undefined,
-          httpUrl: livekit.httpUrl || undefined,
-          apiKey: livekit.apiKey || undefined,
-          apiSecret: livekit.apiSecret || undefined,
-        }),
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): MediaProvider =>
+        selectMediaProvider(
+          readMediaProviderEnv({
+            LIVEKIT_URL: configService.get<string>('livekit.url'),
+            LIVEKIT_HTTP_URL: configService.get<string>('livekit.httpUrl'),
+            LIVEKIT_API_KEY: configService.get<string>('livekit.apiKey'),
+            LIVEKIT_API_SECRET: configService.get<string>('livekit.apiSecret'),
+          }),
+        ),
     },
+    MediaProviderBootstrapLogger,
   ],
   exports: [MEDIA_PROVIDER],
 })
-export class MediaProviderModule implements OnApplicationBootstrap {
-  private readonly logger = new Logger(MediaProviderModule.name);
-
-  constructor(
-    @Inject(LIVEKIT_CONFIG) private readonly livekit: LiveKitConfig,
-  ) {}
-
-  onApplicationBootstrap(): void {
-    if (this.livekit.url && this.livekit.apiKey && this.livekit.apiSecret) {
-      this.logger.log(
-        `MediaProvider: LiveKit (url=${this.livekit.url}, httpUrl=${this.livekit.httpUrl}, key=${this.livekit.apiKey})`,
-      );
-    } else {
-      this.logger.warn(
-        'MediaProvider: Noop (LIVEKIT_URL/LIVEKIT_API_KEY/LIVEKIT_API_SECRET not all set)',
-      );
-    }
-  }
-}
+export class MediaProviderModule {}

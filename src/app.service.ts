@@ -10,14 +10,11 @@ export class AppService {
   }
 
   getInfo() {
-    const signalingNamespace = this.configService.getOrThrow<string>(
-      'SIGNALING_NAMESPACE',
-    );
     return {
       name: 'koom-calls-server',
       version: '0.0.1',
       signaling: {
-        namespace: signalingNamespace,
+        namespace: this.configService.getOrThrow<string>('signaling.namespace'),
       },
       media: {
         provider: 'livekit',

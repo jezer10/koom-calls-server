@@ -1,4 +1,5 @@
 import { Controller, Get, HttpCode, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Inject, type OnModuleInit } from '@nestjs/common';
 import {
   MEDIA_PROVIDER,
@@ -9,8 +10,7 @@ import {
   createLiveKitClient,
   type LiveKitClientBundle,
 } from './livekit.client';
-import { LIVEKIT_CONFIG } from '../config/app-config.module';
-import type { LiveKitConfig } from '../config/app.config';
+import { deriveHttpUrl } from '../config/livekit.config';
 
 interface LiveKitHealth {
   provider: 'livekit' | 'noop';
@@ -36,34 +36,36 @@ interface LiveKitHealth {
   timestamp: string;
 }
 
-/**
- * Public health endpoint for the media provider. Returns the resolved
- * provider (LiveKit or Noop) and exercises the LiveKit SDK end-to-end:
- *   1. mint an access token,
- *   2. create + delete a probe room,
- *   3. list rooms on the server.
- *
- * Use it from the SPA banner, a smoke-test script, or your monitoring
- * stack to confirm the SFU is reachable with the configured credentials.
- */
 @Controller('info/livekit')
 export class LiveKitHealthController implements OnModuleInit {
   private readonly logger = new Logger(LiveKitHealthController.name);
   private directClient: LiveKitClientBundle | undefined;
+  private readonly livekitUrl: string;
+  private readonly livekitHttpUrl: string;
+  private readonly livekitApiKey: string;
+  private readonly livekitApiSecret: string;
 
   constructor(
-    @Inject(LIVEKIT_CONFIG) private readonly livekit: LiveKitConfig,
+    configService: ConfigService,
     @Optional()
     @Inject(MEDIA_PROVIDER)
     private readonly provider?: MediaProvider,
-  ) {}
+  ) {
+    this.livekitUrl = configService.get<string>('livekit.url') ?? '';
+    this.livekitHttpUrl =
+      configService.get<string>('livekit.httpUrl') ||
+      deriveHttpUrl(this.livekitUrl);
+    this.livekitApiKey = configService.get<string>('livekit.apiKey') ?? '';
+    this.livekitApiSecret =
+      configService.get<string>('livekit.apiSecret') ?? '';
+  }
 
   onModuleInit(): void {
-    if (this.livekit.httpUrl && this.livekit.apiKey && this.livekit.apiSecret) {
+    if (this.livekitHttpUrl && this.livekitApiKey && this.livekitApiSecret) {
       this.directClient = createLiveKitClient({
-        url: this.livekit.httpUrl,
-        apiKey: this.livekit.apiKey,
-        apiSecret: this.livekit.apiSecret,
+        url: this.livekitHttpUrl,
+        apiKey: this.livekitApiKey,
+        apiSecret: this.livekitApiSecret,
       });
     }
   }
@@ -72,14 +74,14 @@ export class LiveKitHealthController implements OnModuleInit {
   @HttpCode(200)
   async getHealth(): Promise<LiveKitHealth> {
     const configured = Boolean(
-      this.livekit.url && this.livekit.apiKey && this.livekit.apiSecret,
+      this.livekitUrl && this.livekitApiKey && this.livekitApiSecret,
     );
     const base: LiveKitHealth = {
-      provider: this.livekit.url ? 'livekit' : 'noop',
+      provider: this.livekitUrl ? 'livekit' : 'noop',
       configured,
-      url: this.livekit.url || undefined,
-      httpUrl: this.livekit.httpUrl || undefined,
-      apiKey: this.livekit.apiKey || undefined,
+      url: this.livekitUrl || undefined,
+      httpUrl: this.livekitHttpUrl || undefined,
+      apiKey: this.livekitApiKey || undefined,
       checks: {
         accessToken: { ok: false },
         room: { ok: false },
@@ -96,7 +98,6 @@ export class LiveKitHealthController implements OnModuleInit {
     const probeUserId = 'healthcheck';
     const role: MediaProviderRole = 'host';
 
-    // 1. Token mint
     try {
       const tokenResult = await this.provider.createAccessToken({
         callId: probeCallId,
@@ -116,7 +117,6 @@ export class LiveKitHealthController implements OnModuleInit {
       };
     }
 
-    // 2. List rooms via the raw SDK (independent of MediaProvider interface)
     if (this.directClient) {
       try {
         const rooms = await this.directClient.roomService.listRooms();
@@ -129,7 +129,6 @@ export class LiveKitHealthController implements OnModuleInit {
       }
     }
 
-    // 3. Create + (best-effort) delete a probe room via the MediaProvider
     if (this.provider.createRoom) {
       try {
         const room = await this.provider.createRoom(probeCallId);

@@ -1,4 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { AuthService } from './auth.service';
@@ -65,11 +66,14 @@ function buildSvc(
   } as unknown as JwtService;
   const audit = { log: jest.fn() } as unknown as AuthAuditLogger;
   const providers = opts.providers ?? null;
-  const appConfig = {
-    google: { frontendOrigin: opts.frontendOrigin ?? '' },
-    nodeEnv: opts.nodeEnv ?? 'test',
-  } as import('../config/app.config').AppConfig;
-  const svc = new AuthService(users, jwt, audit, providers, appConfig);
+  const configService = {
+    get: (key: string) => {
+      if (key === 'app.frontendOrigin') return opts.frontendOrigin ?? '';
+      if (key === 'app.nodeEnv') return opts.nodeEnv ?? 'test';
+      return undefined;
+    },
+  } as unknown as ConfigService;
+  const svc = new AuthService(users, jwt, audit, providers, configService);
   return { svc, users, jwt, audit, providers };
 }
 

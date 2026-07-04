@@ -12,18 +12,16 @@ import {
 const JWT_SECRET = 'gateway-test-secret';
 
 function makeConfigService(): ConfigService {
-  const values: Record<string, string> = {
-    JWT_SECRET,
-    SIGNALING_NAMESPACE: '/signaling',
-    CORS_ORIGIN: '*',
-  };
   return {
     getOrThrow: <T = string>(key: string): T => {
-      if (key in values) return values[key] as unknown as T;
+      if (key === 'signaling.namespace') return '/signaling' as T;
+      if (key === 'auth.secret') return JWT_SECRET as T;
       throw new Error(`unexpected key ${key}`);
     },
-    get: <T = string>(key: string): T | undefined =>
-      values[key] as unknown as T,
+    get: <T = string>(key: string): T | undefined => {
+      if (key === 'app.corsOrigin') return '*' as T;
+      return undefined;
+    },
   } as unknown as ConfigService;
 }
 
@@ -115,7 +113,11 @@ function setupContext(): TestContext {
     return true;
   });
 
-  const gateway = new SignalingGateway(registry, bus, makeConfigService());
+  const gateway = new SignalingGateway(
+    registry,
+    bus,
+    makeConfigService(),
+  );
   gateway.server = ns as unknown as Io.Namespace;
 
   const makeSocket = (

@@ -11,8 +11,10 @@ function buildProvider(name: string, enabled = true): OAuthProvider {
       displayName: name.toUpperCase(),
       configKey: `${name.toUpperCase()}_ID`,
       enabled,
+      startUrl: `/auth/${name}/start`,
     },
-    verify: jest.fn(),
+    buildAuthorizationUrl: jest.fn(),
+    exchangeAndVerify: jest.fn(),
   };
 }
 

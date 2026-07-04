@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import {
   LIVEKIT_API_KEY_ENV,
@@ -14,25 +15,29 @@ import {
   MEDIA_PROVIDER,
   type MediaProvider,
 } from '../media-provider.interface';
-import { LIVEKIT_CONFIG } from '../../config/app-config.module';
-import type { LiveKitConfig } from '../../config/app.config';
 
-function buildLivekitConfig(values: Partial<LiveKitConfig>): LiveKitConfig {
+function buildLivekitConfig(values: Partial<Record<string, string>>) {
   return {
-    url: '',
-    apiKey: '',
-    apiSecret: '',
-    httpUrl: '',
-    sfuUrl: '',
+    'livekit.url': '',
+    'livekit.apiKey': '',
+    'livekit.apiSecret': '',
+    'livekit.httpUrl': '',
     ...values,
   };
 }
 
-function buildModule(livekit: LiveKitConfig) {
+function buildModule(livekit: Record<string, string>) {
   @Global()
   @Module({
-    providers: [{ provide: LIVEKIT_CONFIG, useValue: livekit }],
-    exports: [LIVEKIT_CONFIG],
+    providers: [
+      {
+        provide: ConfigService,
+        useValue: {
+          get: (key: string) => livekit[key],
+        },
+      },
+    ],
+    exports: [ConfigService],
   })
   class FakeLivekitConfigModule {}
 
@@ -99,9 +104,9 @@ describe('media-provider module', () => {
     it('provides a LiveKitMediaProvider when LIVEKIT_CONFIG has LiveKit vars', async () => {
       const mod = await buildModule(
         buildLivekitConfig({
-          url: 'wss://livekit',
-          apiKey: 'APIKEY',
-          apiSecret: 'APISECRET',
+          'livekit.url': 'wss://livekit',
+          'livekit.apiKey': 'APIKEY',
+          'livekit.apiSecret': 'APISECRET',
         }),
       );
 

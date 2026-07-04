@@ -3,8 +3,6 @@ import { INestApplication } from '@nestjs/common';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { AppModule } from '../../src/app.module';
-import { buildAppConfig } from '../../src/config/app.config';
-import { parseEnv } from '../../src/config/env.schema';
 import { CallsService, CallEventsStore } from '../../src/calls/calls.service';
 import {
   TURN_SERVICE,
@@ -52,10 +50,10 @@ const wait = (ms: number) =>
 export async function bootstrapTestApp(
   options: BootstrapTestAppOptions = {},
 ): Promise<BootstrappedApp> {
-  const config = buildAppConfig(parseEnv(process.env), process.env);
+  const namespace = process.env.SIGNALING_NAMESPACE ?? '/signaling';
+  const corsOrigin = process.env.CORS_ORIGIN ?? '*';
   // Make JWT secret deterministic for the test session.
-  process.env.JWT_SECRET = process.env.JWT_SECRET ?? config.jwt.secret;
-  process.env.JWT_ISSUER = process.env.JWT_ISSUER ?? config.jwt.issuer;
+  process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'dev-jwt-secret';
 
   const fakeTurn: FakeTurnService = (options.turn as FakeTurnService) ?? {
     calls: [] as TurnCredentialsOptions[],
@@ -113,7 +111,7 @@ export async function bootstrapTestApp(
 
   const app = moduleFixture.createNestApplication();
   app.enableCors({
-    origin: config.signaling.corsOrigin,
+    origin: corsOrigin,
     credentials: true,
   });
   await app.init();
@@ -133,7 +131,7 @@ export async function bootstrapTestApp(
   return {
     app,
     baseUrl,
-    namespace: config.signaling.namespace,
+    namespace,
     callsService,
     eventsStore,
     turnService: fakeTurn,

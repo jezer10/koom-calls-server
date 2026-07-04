@@ -1,36 +1,28 @@
 import { ConfigModule } from '@nestjs/config';
 import type { DynamicModule } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { parseEnv, type ParsedEnv } from '../env.schema';
+import { envValidationSchema } from '../env.schema';
 
-/**
- * Reference pattern for unit tests in CONFIG-1..7 migrations.
- *
- * Tests should provide their own `ParsedEnv` object through
- * `ConfigModule.forRoot({ validate: () => parsedEnv })` rather than
- * mutating `process.env`. The returned object comes from the central
- * Zod schema so every test exercises the same validation surface that
- * the application uses at boot.
- *
- * Returns a `DynamicModule` promise so callers can `await` it from
- * `Test.createTestingModule({ imports: [...] })`.
- */
 export function buildTestingConfigModule(
-  overrides: Partial<ParsedEnv> = {},
+  overrides: Record<string, unknown> = {},
 ): Promise<DynamicModule> {
-  const parsed: ParsedEnv = parseEnv({});
   return Promise.resolve(
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: true,
-      validate: () => ({ ...parsed, ...overrides }),
+      validationSchema: envValidationSchema,
+      load: [
+        () => ({
+          DATABASE_URL: 'postgres://koom:test@db:5432/koom_test',
+          ...overrides,
+        }),
+      ],
     }),
   );
 }
 
-describe('config test pattern (CONFIG-8)', () => {
-  it('parses a ParsedEnv via parseEnv() and feeds it to ConfigModule', async () => {
-    expect(typeof parseEnv).toBe('function');
+describe('config test pattern', () => {
+  it('builds a ConfigModule using the Joi validation schema', async () => {
     const mod = await buildTestingConfigModule({
       JWT_SECRET: 'unit-test-secret',
     });
