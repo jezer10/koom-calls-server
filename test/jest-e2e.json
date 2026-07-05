@@ -6,6 +6,7 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
+  "maxWorkers": 1,
   "testTimeout": 20000,
   "setupFiles": ["<rootDir>/jest.env-setup.js"],
   "globalSetup": "<rootDir>/jest.global-setup.js"

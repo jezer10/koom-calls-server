@@ -113,11 +113,7 @@ function setupContext(): TestContext {
     return true;
   });
 
-  const gateway = new SignalingGateway(
-    registry,
-    bus,
-    makeConfigService(),
-  );
+  const gateway = new SignalingGateway(registry, bus, makeConfigService());
   gateway.server = ns as unknown as Io.Namespace;
 
   const makeSocket = (

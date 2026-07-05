@@ -30,8 +30,7 @@ import { AuditLogger } from './audit-logger.service';
             config.get<number>('rateLimit.ipPerSecond') ?? 30,
           RATE_LIMIT_SOCKET_BURST:
             config.get<number>('rateLimit.socketBurst') ?? 5,
-          RATE_LIMIT_USER_BURST:
-            config.get<number>('rateLimit.userBurst') ?? 3,
+          RATE_LIMIT_USER_BURST: config.get<number>('rateLimit.userBurst') ?? 3,
           RATE_LIMIT_IP_BURST: config.get<number>('rateLimit.ipBurst') ?? 8,
         }),
     },

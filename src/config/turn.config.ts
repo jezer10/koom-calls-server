@@ -5,7 +5,10 @@ function parseInteger(raw: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) ? parsed : fallback;
 }
 
-export function parseList(raw: string | undefined, fallback: string[]): string[] {
+export function parseList(
+  raw: string | undefined,
+  fallback: string[],
+): string[] {
   if (raw === undefined || raw === '') return fallback;
   return raw
     .split(',')

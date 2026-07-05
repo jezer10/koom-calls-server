@@ -8,7 +8,7 @@ interface InfoResponse {
   name: string;
   version: string;
   signaling: { namespace: string };
-  peer: { enabled: boolean; port: number; path: string; key: string };
+  media: { provider: string };
 }
 
 interface HealthResponse {
@@ -53,8 +53,7 @@ describe('REST endpoints (e2e)', () => {
     expect(body.name).toBe('koom-calls-server');
     expect(typeof body.version).toBe('string');
     expect(body.signaling.namespace).toBe('/signaling');
-    expect(typeof body.peer.enabled).toBe('boolean');
-    expect(typeof body.peer.port).toBe('number');
+    expect(body.media.provider).toBe('livekit');
   });
 
   it('GET /health reports status ok', async () => {

@@ -25,10 +25,10 @@ jest.mock('livekit-server-sdk', () => {
 });
 
 import { ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import * as lk from 'livekit-server-sdk';
 import { StaticSfuService } from './sfu.service';
-import type { LiveKitConfig } from '../config/app.config';
 
 const lkm = lk as unknown as {
   AccessToken: new (
@@ -39,15 +39,21 @@ const lkm = lk as unknown as {
   __mocks__: { addGrant: jest.Mock; toJwt: jest.Mock };
 };
 
-function buildConfig(values: Partial<LiveKitConfig>): LiveKitConfig {
+function buildConfigService(values: {
+  url?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  sfuUrl?: string;
+}): ConfigService {
   return {
-    url: '',
-    apiKey: '',
-    apiSecret: '',
-    httpUrl: '',
-    sfuUrl: '',
-    ...values,
-  };
+    get: (key: string) => {
+      if (key === 'livekit.url') return values.url ?? '';
+      if (key === 'livekit.apiKey') return values.apiKey ?? '';
+      if (key === 'livekit.apiSecret') return values.apiSecret ?? '';
+      if (key === 'livekit.sfuUrl') return values.sfuUrl ?? '';
+      return undefined;
+    },
+  } as unknown as ConfigService;
 }
 
 describe('StaticSfuService', () => {
@@ -61,7 +67,7 @@ describe('StaticSfuService', () => {
   it('signs a LiveKit JWT with apiKey/apiSecret and a VideoGrant for the call room', async () => {
     toJwt.mockResolvedValue('signed.jwt.value');
     const service = new StaticSfuService(
-      buildConfig({
+      buildConfigService({
         url: 'ws://localhost:7880',
         apiKey: 'devkey',
         apiSecret: 'devsecret',
@@ -99,7 +105,7 @@ describe('StaticSfuService', () => {
   it('prefers sfuUrl over url', async () => {
     toJwt.mockResolvedValue('jwt');
     const service = new StaticSfuService(
-      buildConfig({
+      buildConfigService({
         url: 'ws://localhost:7880',
         apiKey: 'devkey',
         apiSecret: 'devsecret',
@@ -118,7 +124,7 @@ describe('StaticSfuService', () => {
   it('falls back to url when sfuUrl is empty', async () => {
     toJwt.mockResolvedValue('jwt');
     const service = new StaticSfuService(
-      buildConfig({
+      buildConfigService({
         url: 'ws://localhost:7880',
         apiKey: 'devkey',
         apiSecret: 'devsecret',
@@ -132,7 +138,7 @@ describe('StaticSfuService', () => {
 
   it('throws ServiceUnavailableException when apiKey is missing', async () => {
     const service = new StaticSfuService(
-      buildConfig({ apiSecret: 'devsecret' }),
+      buildConfigService({ apiSecret: 'devsecret' }),
     );
 
     await expect(
@@ -143,7 +149,9 @@ describe('StaticSfuService', () => {
   });
 
   it('throws ServiceUnavailableException when apiSecret is missing', async () => {
-    const service = new StaticSfuService(buildConfig({ apiKey: 'devkey' }));
+    const service = new StaticSfuService(
+      buildConfigService({ apiKey: 'devkey' }),
+    );
 
     await expect(
       service.issueToken({ callId: 'c1', userId: 'u1' }),
@@ -153,7 +161,7 @@ describe('StaticSfuService', () => {
   it('derives roomId as `sfu-<callId>` (preserves existing client contract)', async () => {
     toJwt.mockResolvedValue('jwt');
     const service = new StaticSfuService(
-      buildConfig({ apiKey: 'devkey', apiSecret: 'devsecret' }),
+      buildConfigService({ apiKey: 'devkey', apiSecret: 'devsecret' }),
     );
 
     const result = await service.issueToken({

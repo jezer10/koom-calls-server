@@ -35,6 +35,7 @@ describe('OAuthProvidersRegistry', () => {
         displayName: 'GOOGLE',
         configKey: 'GOOGLE_ID',
         enabled: true,
+        startUrl: '/auth/google/start',
       },
     ]);
     expect(r.get('google')).toBe(google);

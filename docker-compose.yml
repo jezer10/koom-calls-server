@@ -17,7 +17,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-koom}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-koom-dev-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-koom}
       POSTGRES_DB: ${POSTGRES_DB:-koom}
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -63,7 +63,7 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-koom}:${POSTGRES_PASSWORD:-koom-dev-password}@postgres:5432/${POSTGRES_DB:-koom}
+      DATABASE_URL: postgres://${POSTGRES_USER:-koom}:${POSTGRES_PASSWORD:-koom}@postgres:5432/${POSTGRES_DB:-koom}
       REDIS_URL: redis://redis:6379
       LIVEKIT_URL: ws://livekit:7880
       LIVEKIT_HTTP_URL: http://livekit:7880

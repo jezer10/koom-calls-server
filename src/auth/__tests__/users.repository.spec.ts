@@ -7,21 +7,21 @@ function makeRepoDouble(): Repository<UserEntity> {
 
   return {
     create: jest.fn((input: Partial<UserEntity>) => input as UserEntity),
-    save: jest.fn(async (entity: UserEntity) => {
+    save: jest.fn((entity: UserEntity) => {
       store.set(entity.id, { ...entity });
-      return { ...entity };
+      return Promise.resolve({ ...entity });
     }),
-    findOne: jest.fn(async ({ where }: { where: Partial<UserEntity> }) => {
+    findOne: jest.fn(({ where }: { where: Partial<UserEntity> }) => {
       for (const entity of store.values()) {
         if (
           Object.entries(where).every(
             ([key, value]) => entity[key as keyof UserEntity] === value,
           )
         ) {
-          return { ...entity };
+          return Promise.resolve({ ...entity });
         }
       }
-      return null;
+      return Promise.resolve(null);
     }),
   } as unknown as Repository<UserEntity>;
 }

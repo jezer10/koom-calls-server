@@ -10,7 +10,9 @@ import { AuthModule } from './auth.module';
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
         secret: cfg.getOrThrow<string>('auth.secret'),
-        signOptions: { expiresIn: (cfg.get<string>('auth.ttl') ?? '1h') as never },
+        signOptions: {
+          expiresIn: (cfg.get<string>('auth.ttl') ?? '1h') as never,
+        },
       }),
     }),
   ],

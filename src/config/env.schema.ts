@@ -156,7 +156,10 @@ export const envValidationSchema = Joi.object<ValidatedEnv>({
 export function validateEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): ValidatedEnv {
-  const { error, value } = envValidationSchema.validate(env);
-  if (error) throw error;
-  return value as ValidatedEnv;
+  const result = envValidationSchema.validate(env) as {
+    error?: Joi.ValidationError;
+    value: ValidatedEnv;
+  };
+  if (result.error) throw result.error;
+  return result.value;
 }

@@ -125,7 +125,8 @@ describe('AuthController (HTTP)', () => {
           provide: ConfigService,
           useValue: {
             get: (key: string) => {
-              if (key === 'app.frontendOrigin') return opts.frontend ?? FRONTEND;
+              if (key === 'app.frontendOrigin')
+                return opts.frontend ?? FRONTEND;
               if (key === 'app.nodeEnv') return 'test';
               if (key === 'auth.ttl') return '1h';
               return undefined;

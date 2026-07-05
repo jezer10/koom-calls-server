@@ -14,10 +14,11 @@ describe('bootstrap()', () => {
     setGlobalPrefix: jest.Mock;
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.resetModules();
     process.env.DATABASE_URL =
-      process.env.DATABASE_URL ?? 'postgres://koom:koom@localhost:5432/koom_test';
+      process.env.DATABASE_URL ??
+      'postgres://koom:koom@localhost:5432/koom_test';
     process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'dev-jwt-secret';
     process.env.TURN_SHARED_SECRET =
       process.env.TURN_SHARED_SECRET ?? 'dev-turn-secret';
@@ -56,6 +57,7 @@ describe('bootstrap()', () => {
         create: jest.fn().mockResolvedValue(fakeApp),
       },
     }));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     bootstrap = (require('./main') as typeof import('./main')).bootstrap;
     logSpy = jest
       .spyOn(Logger.prototype, 'log')
