@@ -114,10 +114,11 @@ export class WsAuthMiddleware implements NestMiddleware {
     @Optional() @Inject(WsAuthMiddlewareOptions) options?: WsAuthOptions,
   ) {
     const resolved: WsAuthOptions = {
-      secret: options?.secret ?? configService.getOrThrow<string>('JWT_SECRET'),
+      secret:
+        options?.secret ?? configService.getOrThrow<string>('auth.secret'),
       algorithms: options?.algorithms ?? defaultWsAuthOptions.algorithms,
-      issuer: options?.issuer ?? configService.get<string>('JWT_ISSUER'),
-      audience: options?.audience ?? configService.get<string>('JWT_AUDIENCE'),
+      issuer: options?.issuer ?? configService.get<string>('auth.issuer'),
+      audience: options?.audience ?? configService.get<string>('auth.audience'),
       clockTolerance:
         options?.clockTolerance ?? defaultWsAuthOptions.clockTolerance,
       userIdClaim: options?.userIdClaim ?? defaultWsAuthOptions.userIdClaim,

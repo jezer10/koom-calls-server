@@ -3,19 +3,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
-const stubConfig: Record<string, string | number | boolean> = {
-  SIGNALING_NAMESPACE: '/signaling',
-};
-
-const stubConfigService: Partial<ConfigService> = {
-  get: <T = unknown>(key: string): T | undefined =>
-    stubConfig[key] as T | undefined,
-  getOrThrow: <T = unknown>(key: string): T => {
-    if (key in stubConfig) return stubConfig[key] as T;
-    throw new Error(`unexpected key ${key}`);
-  },
-};
-
 describe('AppController', () => {
   let controller: AppController;
   let service: AppService;
@@ -25,7 +12,12 @@ describe('AppController', () => {
       controllers: [AppController],
       providers: [
         AppService,
-        { provide: ConfigService, useValue: stubConfigService },
+        {
+          provide: ConfigService,
+          useValue: {
+            getOrThrow: jest.fn().mockReturnValue('/signaling'),
+          },
+        },
       ],
     }).compile();
 

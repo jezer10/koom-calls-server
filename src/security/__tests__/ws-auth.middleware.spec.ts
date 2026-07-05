@@ -4,14 +4,8 @@ import type { SocketLike } from '../ws-auth.middleware';
 
 function makeConfigService(secret: string): ConfigService {
   return {
-    getOrThrow: <T = string>(key: string): T => {
-      if (key === 'JWT_SECRET') return secret as unknown as T;
-      throw new Error(`unexpected key ${key}`);
-    },
-    get: <T = string>(key: string): T | undefined => {
-      if (key === 'JWT_ISSUER' || key === 'JWT_AUDIENCE') return undefined;
-      throw new Error(`unexpected key ${key}`);
-    },
+    getOrThrow: jest.fn().mockReturnValue(secret),
+    get: jest.fn().mockReturnValue(undefined),
   } as unknown as ConfigService;
 }
 

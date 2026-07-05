@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import {
   ConnectedSocket,
   MessageBody,
@@ -9,7 +10,6 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { Inject, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type * as Io from 'socket.io';
 import { RoomRegistry } from './room.registry';
 import { RateLimitGuard } from './rate-limit.guard';
@@ -27,6 +27,7 @@ import {
   parseSfuSubscribeTrackPayload,
 } from './dto/signaling.dto';
 import type {
+  CallEventBroadcast,
   CallEventType,
   PeerJoinedEvent,
   PeerLeftEvent,
@@ -70,14 +71,14 @@ export class SignalingGateway
     private readonly configService: ConfigService,
   ) {
     this.namespace = this.configService.getOrThrow<string>(
-      'SIGNALING_NAMESPACE',
+      'signaling.namespace',
     );
-    this.corsOrigin = this.configService.get<string>('CORS_ORIGIN') ?? '*';
+    this.corsOrigin = this.configService.get<string>('app.corsOrigin') ?? '*';
   }
 
   afterInit(server: Io.Namespace): void {
     const middleware = new JwtWsMiddleware({
-      secret: this.configService.getOrThrow<string>('JWT_SECRET'),
+      secret: this.configService.getOrThrow<string>('auth.secret'),
     });
     server.use((socket: Io.Socket, next: (err?: Error) => void) => {
       middleware.use(socket, (err) => {
@@ -120,8 +121,6 @@ export class SignalingGateway
     }
   }
 
-  // --- Outgoing "invite" helper (server -> client) ----------------------------
-
   async emitCallInvite(
     callId: string,
     from: string,
@@ -144,8 +143,6 @@ export class SignalingGateway
     }
     return { delivered, skipped };
   }
-
-  // --- Subscribe handlers ----------------------------------------------------
 
   @SubscribeMessage('peer:join')
   async handlePeerJoin(
@@ -223,7 +220,8 @@ export class SignalingGateway
       throw new WsException(`invalid payload: ${parsed.reason}`);
     }
     const callId = parsed.value.callId;
-    if (!this.registry.isParticipant(callId, userId)) {
+    const member = this.registry.member(callId, client.id);
+    if (!member || member.userId !== userId) {
       throw new WsException('forbidden');
     }
     const event: PeerReconnectingEvent = {
@@ -235,18 +233,37 @@ export class SignalingGateway
     return { ok: true, callId };
   }
 
+  @SubscribeMessage('call:invite')
+  async handleCallInvite(
+    @MessageBody() payload: unknown,
+    @ConnectedSocket() client: Io.Socket,
+  ) {
+    this.enforceRateLimit(client);
+    const userId = getUserId(client);
+    const parsed = parseCallInvitePayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    const { callId, from, to, type } = parsed.value;
+    if (from !== userId) {
+      throw new WsException('forbidden');
+    }
+    await this.emitCallInvite(callId, from, to, type);
+    return { ok: true, callId };
+  }
+
   @SubscribeMessage('call:ringing')
   async handleCallRinging(
     @MessageBody() payload: unknown,
     @ConnectedSocket() client: Io.Socket,
   ) {
     this.enforceRateLimit(client);
-    return this.forwardCallEvent(
-      client,
-      payload,
-      'call:ringing',
-      parseCallRingingPayload,
-    );
+    const userId = getUserId(client);
+    const parsed = parseCallRingingPayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    return this.handleCallEvent(parsed.value.callId, 'call:ringing', userId);
   }
 
   @SubscribeMessage('call:accept')
@@ -255,12 +272,12 @@ export class SignalingGateway
     @ConnectedSocket() client: Io.Socket,
   ) {
     this.enforceRateLimit(client);
-    return this.forwardCallEvent(
-      client,
-      payload,
-      'call:accept',
-      parseCallAcceptPayload,
-    );
+    const userId = getUserId(client);
+    const parsed = parseCallAcceptPayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    return this.handleCallEvent(parsed.value.callId, 'call:accept', userId);
   }
 
   @SubscribeMessage('call:reject')
@@ -269,12 +286,12 @@ export class SignalingGateway
     @ConnectedSocket() client: Io.Socket,
   ) {
     this.enforceRateLimit(client);
-    return this.forwardCallEvent(
-      client,
-      payload,
-      'call:reject',
-      parseCallRejectPayload,
-    );
+    const userId = getUserId(client);
+    const parsed = parseCallRejectPayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    return this.handleCallEvent(parsed.value.callId, 'call:reject', userId);
   }
 
   @SubscribeMessage('call:cancel')
@@ -283,12 +300,12 @@ export class SignalingGateway
     @ConnectedSocket() client: Io.Socket,
   ) {
     this.enforceRateLimit(client);
-    return this.forwardCallEvent(
-      client,
-      payload,
-      'call:cancel',
-      parseCallCancelPayload,
-    );
+    const userId = getUserId(client);
+    const parsed = parseCallCancelPayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    return this.handleCallEvent(parsed.value.callId, 'call:cancel', userId);
   }
 
   @SubscribeMessage('call:end')
@@ -297,126 +314,98 @@ export class SignalingGateway
     @ConnectedSocket() client: Io.Socket,
   ) {
     this.enforceRateLimit(client);
-    return this.forwardCallEvent(
-      client,
-      payload,
-      'call:end',
-      parseCallEndPayload,
-    );
+    const userId = getUserId(client);
+    const parsed = parseCallEndPayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    return this.handleCallEvent(parsed.value.callId, 'call:end', userId);
   }
 
   @SubscribeMessage('sfu:join-room')
   async handleSfuJoinRoom(
     @MessageBody() payload: unknown,
     @ConnectedSocket() client: Io.Socket,
-  ) {
+  ): Promise<SfuEventAck> {
     this.enforceRateLimit(client);
-    return this.handleSfu(
-      client,
-      payload,
-      'sfu:join-room',
-      parseSfuJoinRoomPayload,
-      ['accepted', 'active'],
-    );
+    const userId = getUserId(client);
+    const parsed = parseSfuJoinRoomPayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    return this.handleSfuEvent(parsed.value.callId, userId, true);
   }
 
   @SubscribeMessage('sfu:publish-track')
   async handleSfuPublishTrack(
     @MessageBody() payload: unknown,
     @ConnectedSocket() client: Io.Socket,
-  ) {
+  ): Promise<SfuEventAck> {
     this.enforceRateLimit(client);
-    return this.handleSfu(
-      client,
-      payload,
-      'sfu:publish-track',
-      parseSfuPublishTrackPayload,
-    );
+    const userId = getUserId(client);
+    const parsed = parseSfuPublishTrackPayload(payload);
+    if (!parsed.ok) {
+      throw new WsException(`invalid payload: ${parsed.reason}`);
+    }
+    return this.handleSfuEvent(parsed.value.callId, userId, false);
   }
 
   @SubscribeMessage('sfu:subscribe-track')
   async handleSfuSubscribeTrack(
     @MessageBody() payload: unknown,
     @ConnectedSocket() client: Io.Socket,
-  ) {
+  ): Promise<SfuEventAck> {
     this.enforceRateLimit(client);
-    return this.handleSfu(
-      client,
-      payload,
-      'sfu:subscribe-track',
-      parseSfuSubscribeTrackPayload,
-    );
-  }
-
-  // --- Private helpers --------------------------------------------------------
-
-  private enforceRateLimit(client: Io.Socket): void {
-    if (!this.rateLimit.tryConsume(client.id)) {
-      throw new WsException('rate-limit');
-    }
-  }
-
-  private async forwardCallEvent(
-    client: Io.Socket,
-    payload: unknown,
-    event: CallEventType,
-    parser: (
-      v: unknown,
-    ) =>
-      | { ok: true; value: { callId: string } }
-      | { ok: false; reason: string },
-  ): Promise<{ ok: true; callId: string; event: CallEventType }> {
     const userId = getUserId(client);
-    const parsed = parser(payload);
+    const parsed = parseSfuSubscribeTrackPayload(payload);
     if (!parsed.ok) {
       throw new WsException(`invalid payload: ${parsed.reason}`);
     }
-    const callId = parsed.value.callId;
+    return this.handleSfuEvent(parsed.value.callId, userId, false);
+  }
+
+  private async handleCallEvent(
+    callId: string,
+    event: CallEventType,
+    userId: string,
+  ): Promise<{ ok: true; callId: string; event: CallEventType }> {
     const auth = await this.callsEventBus.isParticipant(callId, userId);
-    if (!auth.authorized && !this.registry.isParticipant(callId, userId)) {
+    const isParticipant =
+      auth.authorized || this.registry.isParticipant(callId, userId);
+    if (!isParticipant) {
       throw new WsException('forbidden');
     }
-    this.server.to(callId).emit('call:event', {
-      callId,
-      from: userId,
-      event,
-    });
-    void this.callsEventBus.onCallEvent(callId, event, userId);
+    await this.callsEventBus.onCallEvent(callId, event, userId);
+    const payload: CallEventBroadcast = { callId, from: userId, event };
+    this.server.to(callId).emit('call:event', payload);
     return { ok: true, callId, event };
   }
 
-  private async handleSfu(
-    client: Io.Socket,
-    payload: unknown,
-    type: 'sfu:join-room' | 'sfu:publish-track' | 'sfu:subscribe-track',
-    parser: (
-      v: unknown,
-    ) =>
-      | { ok: true; value: { callId: string } }
-      | { ok: false; reason: string },
-    requiredStates?: Array<
-      'pending' | 'ringing' | 'accepted' | 'active' | 'ended'
-    >,
+  private async handleSfuEvent(
+    callId: string,
+    userId: string,
+    requireConnectedState: boolean,
   ): Promise<SfuEventAck> {
-    const userId = getUserId(client);
-    const parsed = parser(payload);
-    if (!parsed.ok) {
-      throw new WsException(`invalid payload: ${parsed.reason}`);
-    }
-    const callId = parsed.value.callId;
     const auth = await this.callsEventBus.isParticipant(callId, userId);
-    if (!auth.authorized) {
+    const isParticipant =
+      auth.authorized || this.registry.isParticipant(callId, userId);
+    if (!isParticipant) {
       throw new WsException('forbidden');
     }
-    if (requiredStates && requiredStates.length > 0) {
-      const state = auth.state;
-      if (!state || !requiredStates.includes(state)) {
-        throw new WsException(
-          `call ${callId} not in required state (${requiredStates.join('|')})`,
-        );
-      }
+    if (
+      requireConnectedState &&
+      auth.state !== 'accepted' &&
+      auth.state !== 'active'
+    ) {
+      throw new WsException('forbidden');
     }
-    void type;
     return { status: 'pending-m3' };
+  }
+
+  private enforceRateLimit(client: Io.Socket): void {
+    const allowed = this.rateLimit.tryConsume(client.id);
+    if (!allowed) {
+      throw new WsException('rate_limited');
+    }
   }
 }

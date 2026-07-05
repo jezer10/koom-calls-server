@@ -1,9 +1,9 @@
-# LiveKit configuration template for local docker-compose.
-# docker-compose currently launches LiveKit with `--dev` (which spins up
+# LiveKit configuration template for the bundled compose stacks.
+# Both compose files currently launch LiveKit with `--dev`, which spins up
 # an ephemeral in-memory config and registers a well-known devkey/secret
-# pair, disabling the 32-char prod secret-length check). The same values
-# are mirrored in back/.env as LIVEKIT_API_KEY / LIVEKIT_API_SECRET so the
-# back signs JWTs that match the server's in-memory key set.
+# pair, disabling the 32-char prod secret-length check. The same values are
+# mirrored in back/.env as LIVEKIT_API_KEY / LIVEKIT_API_SECRET so the back
+# signs JWTs that match the server's in-memory key set.
 #
 # For production, switch docker-compose to `--config /etc/livekit.yaml`,
 # set a >=32-char LIVEKIT_API_SECRET in .env, and either inline the keys

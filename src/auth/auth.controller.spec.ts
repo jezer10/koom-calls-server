@@ -1,13 +1,11 @@
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthAuditLogger } from './auth-audit.logger';
-import { UserEntity } from './entities/user.entity';
 import { UsersRepository } from './users.repository';
 import { OAuthProvidersRegistry } from './providers/oauth-providers.registry';
 import {
@@ -19,8 +17,6 @@ import {
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { WsTokenService } from './ws/ws-token.service';
-import { APP_CONFIG } from '../config/app-config.module';
-import type { AppConfig } from '../config/app.config';
 
 class StubJwtAuthGuard {
   canActivate(ctx: {
@@ -61,6 +57,12 @@ function makeProvider(
 }
 
 const FRONTEND = 'https://app.example.com';
+
+function readSetCookies(headers: Record<string, unknown>): string[] {
+  const value = headers['set-cookie'];
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
 
 describe('AuthController (HTTP)', () => {
   let audit: { log: jest.Mock };
@@ -105,28 +107,7 @@ describe('AuthController (HTTP)', () => {
       findById: jest.fn().mockResolvedValue(makeUser()),
     };
 
-    const appConfig = {
-      google: { frontendOrigin: opts.frontend ?? FRONTEND },
-      nodeEnv: 'test',
-    } as AppConfig;
-    const configService = {
-      get: (k: string) => (k === 'JWT_SECRET' ? 'test-secret' : undefined),
-      getOrThrow: (k: string) => {
-        if (k === 'JWT_SECRET') return 'test-secret';
-        throw new Error(`missing ${k}`);
-      },
-    } as unknown as ConfigService;
-
     const module: TestingModule = await Test.createTestingModule({
-      imports: [
-        TypeOrmModule.forRoot({
-          type: 'better-sqlite3',
-          database: ':memory:',
-          entities: [UserEntity],
-          synchronize: true,
-        }),
-        TypeOrmModule.forFeature([UserEntity]),
-      ],
       controllers: [AuthController],
       providers: [
         AuthService,
@@ -140,8 +121,22 @@ describe('AuthController (HTTP)', () => {
             sign: (payload: object) => `signed.${JSON.stringify(payload)}`,
           },
         },
-        { provide: APP_CONFIG, useValue: appConfig },
-        { provide: ConfigService, useValue: configService },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) => {
+              if (key === 'app.frontendOrigin')
+                return opts.frontend ?? FRONTEND;
+              if (key === 'app.nodeEnv') return 'test';
+              if (key === 'auth.ttl') return '1h';
+              return undefined;
+            },
+            getOrThrow: (key: string) => {
+              if (key === 'auth.secret') return 'test-secret';
+              throw new Error(`missing ${key}`);
+            },
+          },
+        },
         OAuthProvidersRegistry,
         { provide: OAUTH_PROVIDERS, useValue: providers },
         WsTokenService,
@@ -193,9 +188,9 @@ describe('AuthController (HTTP)', () => {
     const res = await request(app.getHttpServer())
       .get('/auth/google/start?returnTo=/pre-join/ABC')
       .expect(302);
-    const cookies = res.headers['set-cookie'] as string[] | undefined;
+    const cookies = readSetCookies(res.headers);
     expect(cookies).toBeDefined();
-    const cookieStr = (cookies ?? []).join('; ');
+    const cookieStr = cookies.join('; ');
     expect(cookieStr).toMatch(/oauth_state=/);
     expect(cookieStr).toMatch(/oauth_returnto=/);
     expect(res.headers['location']).toMatch(/accounts\.google\.com/);
@@ -248,8 +243,8 @@ describe('AuthController (HTTP)', () => {
     expect(res.text).toMatch(/koom-oauth-success/);
     expect(res.text).toMatch(/postMessage/);
     expect(res.text).toMatch(/pre-join\/X/);
-    const cookies = res.headers['set-cookie'] as string[] | undefined;
-    expect((cookies ?? []).join('; ')).toMatch(/koom_session=/);
+    const cookies = readSetCookies(res.headers);
+    expect(cookies.join('; ')).toMatch(/koom_session=/);
     expect(verify).toHaveBeenCalledWith('real');
   });
 
@@ -273,8 +268,8 @@ describe('AuthController (HTTP)', () => {
       .expect(200);
     const body = res.body as { displayName: string };
     expect(body.displayName).toBe('Anon');
-    const cookies = res.headers['set-cookie'] as string[] | undefined;
-    expect((cookies ?? []).join('; ')).toMatch(/koom_session=/);
+    const cookies = readSetCookies(res.headers);
+    expect(cookies.join('; ')).toMatch(/koom_session=/);
   });
 
   it('GET /auth/me returns 401 without auth (stub guard rejects)', async () => {

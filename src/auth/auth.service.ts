@@ -5,6 +5,7 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UsersRepository } from './users.repository';
 import { UserEntity } from './entities/user.entity';
@@ -15,8 +16,6 @@ import {
   type OAuthProvider,
   type OAuthProvidersMap,
 } from './providers/oauth-provider.interface';
-import { APP_CONFIG } from '../config/app-config.module';
-import type { AppConfig } from '../config/app.config';
 
 export interface SignInResult {
   token: string;
@@ -41,7 +40,7 @@ export class AuthService {
     @Optional()
     @Inject(OAUTH_PROVIDERS)
     private readonly providers: OAuthProvidersMap | null,
-    @Inject(APP_CONFIG) private readonly appConfig: AppConfig,
+    private readonly configService: ConfigService,
   ) {}
 
   startOAuth(name: string): string {
@@ -164,11 +163,11 @@ export class AuthService {
   }
 
   getFrontendOrigin(): string {
-    return this.appConfig.google.frontendOrigin;
+    return this.configService.get<string>('app.frontendOrigin') ?? '';
   }
 
   isProduction(): boolean {
-    return this.appConfig.nodeEnv === 'production';
+    return this.configService.get<string>('app.nodeEnv') === 'production';
   }
 
   getCookieSecure(): boolean {

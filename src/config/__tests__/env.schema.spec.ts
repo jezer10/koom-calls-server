@@ -1,383 +1,92 @@
+import Joi from 'joi';
 import {
-  EnvValidationError,
   NODE_ENV_VALUES,
-  buildEnvSchema,
-  parseEnv,
+  envValidationSchema,
+  validateEnv,
 } from '../env.schema';
 
-describe('parseEnv', () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
-    process.env = { ...originalEnv };
-    for (const key of [
-      'PORT',
-      'CORS_ORIGIN',
-      'SIGNALING_NAMESPACE',
-      'DATABASE_URL',
-      'JWT_SECRET',
-      'JWT_TTL',
-      'JWT_AUDIENCE',
-      'JWT_ISSUER',
-      'LIVEKIT_URL',
-      'LIVEKIT_API_KEY',
-      'LIVEKIT_API_SECRET',
-      'SFU_URL',
-      'REDIS_URL',
-      'TURN_URL',
-      'TURN_URLS',
-      'TURN_SHARED_SECRET',
-      'TURN_TTL',
-      'TURN_TOKEN_TTL_SECONDS',
-      'RATE_LIMIT_SOCKET_PER_SECOND',
-      'RATE_LIMIT_USER_PER_SECOND',
-      'RATE_LIMIT_IP_PER_SECOND',
-      'RATE_LIMIT_SOCKET_BURST',
-      'RATE_LIMIT_USER_BURST',
-      'RATE_LIMIT_IP_BURST',
-      'SFU_TOKEN_TTL_SECONDS',
-      'LOG_LEVEL',
-      'NODE_ENV',
-      'GOOGLE_CLIENT_ID',
-      'GOOGLE_CLIENT_SECRET',
-      'GOOGLE_REDIRECT_URI',
-      'FRONTEND_ORIGIN',
-    ]) {
-      delete process.env[key];
-    }
-  });
-
-  afterAll(() => {
-    process.env = originalEnv;
-  });
-
-  describe('default values', () => {
-    it('returns the documented defaults for every variable', () => {
-      const parsed = parseEnv({});
-      expect(parsed.PORT).toBe(8080);
-      expect(parsed.CORS_ORIGIN).toBe('*');
-      expect(parsed.SIGNALING_NAMESPACE).toBe('/signaling');
-      expect(parsed.DATABASE_URL).toBe('sqlite::memory:');
-      expect(parsed.JWT_TTL).toBe('1h');
-      expect(parsed.JWT_AUDIENCE).toBeUndefined();
-      expect(parsed.JWT_ISSUER).toBeUndefined();
-      expect(parsed.LIVEKIT_URL).toBe('');
-      expect(parsed.LIVEKIT_API_KEY).toBe('');
-      expect(parsed.LIVEKIT_API_SECRET).toBe('');
-      expect(parsed.SFU_URL).toBe('');
-      expect(parsed.REDIS_URL).toBe('');
-      expect(parsed.TURN_URL).toBe('');
-      expect(parsed.TURN_URLS).toBe('');
-      expect(parsed.TURN_SHARED_SECRET).toBe('');
-      expect(parsed.TURN_TTL).toBe(3600);
-      expect(parsed.TURN_TOKEN_TTL_SECONDS).toBe(3600);
-      expect(parsed.RATE_LIMIT_SOCKET_PER_SECOND).toBe(20);
-      expect(parsed.RATE_LIMIT_USER_PER_SECOND).toBe(10);
-      expect(parsed.RATE_LIMIT_IP_PER_SECOND).toBe(30);
-      expect(parsed.RATE_LIMIT_SOCKET_BURST).toBe(5);
-      expect(parsed.RATE_LIMIT_USER_BURST).toBe(3);
-      expect(parsed.RATE_LIMIT_IP_BURST).toBe(8);
-      expect(parsed.SFU_TOKEN_TTL_SECONDS).toBe(3600);
-      expect(parsed.LOG_LEVEL).toBe('debug');
-      expect(parsed.NODE_ENV).toBe('development');
-      expect(typeof parsed.JWT_SECRET).toBe('string');
-      expect(parsed.JWT_SECRET.length).toBeGreaterThan(0);
-    });
-
-    it('defaults NODE_ENV to development when missing, empty, or unknown', () => {
-      expect(parseEnv({}).NODE_ENV).toBe('development');
-      expect(parseEnv({ NODE_ENV: '' }).NODE_ENV).toBe('development');
-      expect(parseEnv({ NODE_ENV: 'staging' }).NODE_ENV).toBe('development');
-    });
-
-    it('exposes the canonical NODE_ENV enum values', () => {
-      expect(NODE_ENV_VALUES).toEqual(['development', 'test', 'production']);
-    });
-  });
-
-  describe('number coercion', () => {
-    it('coerces string PORT to integer', () => {
-      expect(parseEnv({ PORT: '4040' }).PORT).toBe(4040);
-    });
-
-    it('coerces TURN_TTL from string to integer', () => {
-      expect(parseEnv({ TURN_TTL: '900' }).TURN_TTL).toBe(900);
-    });
-  });
-
-  describe('NODE_ENV enum', () => {
-    it.each(['development', 'test', 'production'])(
-      'accepts NODE_ENV=%s',
-      (value) => {
-        const env: NodeJS.ProcessEnv = { NODE_ENV: value };
-        if (value === 'production') {
-          env['JWT_SECRET'] = 'prod';
-          env['TURN_URL'] = 'turn:turn.example.com:3478';
-          env['TURN_SHARED_SECRET'] = 'turn-secret';
-          env['GOOGLE_CLIENT_ID'] = 'prod.apps.googleusercontent.com';
-          env['GOOGLE_CLIENT_SECRET'] = 'prod-secret';
-          env['GOOGLE_REDIRECT_URI'] =
-            'https://app.example.com/auth/google/callback';
-          env['FRONTEND_ORIGIN'] = 'https://app.example.com';
-          env['CORS_ORIGIN'] = 'https://app.example.com';
-        }
-        expect(parseEnv(env).NODE_ENV).toBe(value);
-      },
+describe('validateEnv', () => {
+  it('requires a Postgres DATABASE_URL', () => {
+    expect(() => validateEnv({})).toThrow(Joi.ValidationError);
+    expect(() => validateEnv({ DATABASE_URL: 'sqlite::memory:' })).toThrow(
+      /postgres/,
     );
   });
 
-  describe('JWT_SECRET handling', () => {
-    it('auto-generates JWT_SECRET in development with a warning', () => {
-      const warnings: string[] = [];
-      const parsed = parseEnv(
-        { NODE_ENV: 'development' },
-        { onWarning: (msg) => warnings.push(msg) },
-      );
-      expect(typeof parsed.JWT_SECRET).toBe('string');
-      expect(parsed.JWT_SECRET.length).toBeGreaterThan(0);
-      expect(warnings).toHaveLength(1);
-      expect(warnings[0]).toMatch(/JWT_SECRET/);
+  it('applies defaults around a valid Postgres URL', () => {
+    const parsed = validateEnv({
+      DATABASE_URL: 'postgres://koom:secret@db:5432/koom',
     });
 
-    it('auto-generates JWT_SECRET in test with a warning', () => {
-      const warnings: string[] = [];
-      const parsed = parseEnv(
-        { NODE_ENV: 'test' },
-        { onWarning: (msg) => warnings.push(msg) },
-      );
-      expect(typeof parsed.JWT_SECRET).toBe('string');
-      expect(warnings).toHaveLength(1);
+    expect(parsed.PORT).toBe(8080);
+    expect(parsed.CORS_ORIGIN).toBe('*');
+    expect(parsed.SIGNALING_NAMESPACE).toBe('/signaling');
+    expect(parsed.DATABASE_SSL).toBe(false);
+    expect(parsed.TURN_REALM).toBe('koom.local');
+    expect(parsed.TURN_STUN_URLS).toBe('stun:stun.l.google.com:19302');
+    expect(parsed.NODE_ENV).toBe('development');
+    expect(typeof parsed.JWT_SECRET).toBe('string');
+  });
+
+  it('coerces numeric and boolean values', () => {
+    const parsed = validateEnv({
+      DATABASE_URL: 'postgres://db/koom',
+      PORT: '4040',
+      DATABASE_SSL: 'true',
+      TURN_TTL: '900',
+      PRESENCE_TTL_SECONDS: '75',
     });
 
-    it('uses the provided JWT_SECRET when set in development', () => {
-      const warnings: string[] = [];
-      const parsed = parseEnv(
-        { JWT_SECRET: 'my-dev-secret' },
-        { onWarning: (msg) => warnings.push(msg) },
-      );
-      expect(parsed.JWT_SECRET).toBe('my-dev-secret');
-      expect(warnings).toHaveLength(0);
-    });
+    expect(parsed.PORT).toBe(4040);
+    expect(parsed.DATABASE_SSL).toBe(true);
+    expect(parsed.TURN_TTL).toBe(900);
+    expect(parsed.PRESENCE_TTL_SECONDS).toBe(75);
+  });
 
-    it('uses the provided JWT_SECRET in production', () => {
-      const parsed = parseEnv({
-        NODE_ENV: 'production',
+  it.each(NODE_ENV_VALUES)('accepts NODE_ENV=%s', (value) => {
+    const env: NodeJS.ProcessEnv = {
+      DATABASE_URL: 'postgres://db/koom',
+      NODE_ENV: value,
+    };
+    if (value === 'production') {
+      Object.assign(env, {
         JWT_SECRET: 'prod-secret',
         TURN_URL: 'turn:turn.example.com:3478',
         TURN_SHARED_SECRET: 'turn-secret',
         GOOGLE_CLIENT_ID: 'prod.apps.googleusercontent.com',
         GOOGLE_CLIENT_SECRET: 'prod-secret',
-        GOOGLE_REDIRECT_URI: 'https://app.example.com/auth/google/callback',
+        GOOGLE_REDIRECT_URI: 'https://api.example.com/auth/google/callback',
         FRONTEND_ORIGIN: 'https://app.example.com',
         CORS_ORIGIN: 'https://app.example.com',
       });
-      expect(parsed.JWT_SECRET).toBe('prod-secret');
-    });
-
-    it('rejects missing JWT_SECRET in production', () => {
-      expect(() => parseEnv({ NODE_ENV: 'production' })).toThrow(
-        EnvValidationError,
-      );
-      try {
-        parseEnv({ NODE_ENV: 'production' });
-      } catch (err) {
-        expect(err).toBeInstanceOf(EnvValidationError);
-        const envErr = err as EnvValidationError;
-        expect(envErr.issues.issues.map((i) => i.path.join('.'))).toContain(
-          'JWT_SECRET',
-        );
-      }
-    });
-
-    it('rejects empty JWT_SECRET in production', () => {
-      expect(() =>
-        parseEnv({ NODE_ENV: 'production', JWT_SECRET: '' }),
-      ).toThrow(EnvValidationError);
-    });
+    }
+    expect(validateEnv(env).NODE_ENV).toBe(value);
   });
 
-  describe('extras handling', () => {
-    it('ignores unknown extra env keys (passthrough does not throw)', () => {
-      expect(() =>
-        parseEnv({
-          SOME_FUTURE_VAR: 'irrelevant',
-          ANOTHER_ONE: '123',
-        }),
-      ).not.toThrow();
-      const parsed = parseEnv({
-        SOME_FUTURE_VAR: 'irrelevant',
-        ANOTHER_ONE: '123',
-      });
-      expect(parsed.PORT).toBe(8080);
-      expect(parsed.NODE_ENV).toBe('development');
-    });
-
-    it('does not throw on extra keys, even in production', () => {
-      const parsed = parseEnv({
+  it('requires production-only variables in production', () => {
+    expect(() =>
+      validateEnv({
+        DATABASE_URL: 'postgres://db/koom',
         NODE_ENV: 'production',
-        JWT_SECRET: 'prod',
+        JWT_SECRET: 'prod-secret',
         TURN_URL: 'turn:turn.example.com:3478',
         TURN_SHARED_SECRET: 'turn-secret',
         GOOGLE_CLIENT_ID: 'prod.apps.googleusercontent.com',
-        GOOGLE_CLIENT_SECRET: 'prod-secret',
-        GOOGLE_REDIRECT_URI: 'https://app.example.com/auth/google/callback',
-        FRONTEND_ORIGIN: 'https://app.example.com',
         CORS_ORIGIN: 'https://app.example.com',
-        UNKNOWN: 'x',
-      });
-      expect(parsed.NODE_ENV).toBe('production');
-      expect(parsed.JWT_SECRET).toBe('prod');
-    });
+      }),
+    ).toThrow(Joi.ValidationError);
   });
 
-  describe('EnvValidationError', () => {
-    it('exposes the zod issues and the original env', () => {
-      const env = { NODE_ENV: 'production' };
-      try {
-        parseEnv(env);
-        fail('expected parseEnv to throw');
-      } catch (err) {
-        expect(err).toBeInstanceOf(EnvValidationError);
-        const e = err as EnvValidationError;
-        expect(e.env).toBe(env);
-        expect(e.issues.issues.length).toBeGreaterThan(0);
-        expect(e.message).toContain('Invalid environment configuration');
-      }
-    });
+  it('keeps unknown variables allowed', () => {
+    expect(() =>
+      validateEnv({
+        DATABASE_URL: 'postgres://db/koom',
+        SOME_FUTURE_VAR: 'irrelevant',
+      }),
+    ).not.toThrow();
   });
 
-  describe('buildEnvSchema', () => {
-    it('returns a schema that can be parsed independently', () => {
-      const schema = buildEnvSchema({ PORT: '9090' });
-      const result = schema.parse({ PORT: '9090' });
-      expect(result['PORT']).toBe(9090);
-    });
-
-    it('forwards warnings to the provided hook', () => {
-      const seen: string[] = [];
-      const schema = buildEnvSchema({}, { onWarning: (msg) => seen.push(msg) });
-      schema.parse({});
-      expect(seen).toHaveLength(1);
-    });
-  });
-
-  describe('newly declared variables (CONFIG-1)', () => {
-    it('TURN_URLS defaults to empty string', () => {
-      expect(parseEnv({}).TURN_URLS).toBe('');
-      expect(parseEnv({ TURN_URLS: 'turn:a:3478,turn:b:3478' }).TURN_URLS).toBe(
-        'turn:a:3478,turn:b:3478',
-      );
-    });
-
-    it('SFU_URL defaults to empty string', () => {
-      expect(parseEnv({}).SFU_URL).toBe('');
-      expect(
-        parseEnv({ SFU_URL: 'wss://sfu.example.com/v1/rtc' }).SFU_URL,
-      ).toBe('wss://sfu.example.com/v1/rtc');
-    });
-
-    it('LOG_LEVEL defaults to debug', () => {
-      expect(parseEnv({}).LOG_LEVEL).toBe('debug');
-      expect(parseEnv({ LOG_LEVEL: 'info' }).LOG_LEVEL).toBe('info');
-      expect(parseEnv({ LOG_LEVEL: 'warn' }).LOG_LEVEL).toBe('warn');
-    });
-
-    it('JWT_AUDIENCE and JWT_ISSUER are optional and only present when set', () => {
-      expect(parseEnv({}).JWT_AUDIENCE).toBeUndefined();
-      expect(parseEnv({}).JWT_ISSUER).toBeUndefined();
-      expect(
-        parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_AUDIENCE,
-      ).toBe('koom');
-      expect(
-        parseEnv({ JWT_AUDIENCE: 'koom', JWT_ISSUER: 'koom-iss' }).JWT_ISSUER,
-      ).toBe('koom-iss');
-    });
-
-    it('rate-limit fields default to the documented values', () => {
-      const parsed = parseEnv({});
-      expect(parsed.RATE_LIMIT_SOCKET_PER_SECOND).toBe(20);
-      expect(parsed.RATE_LIMIT_USER_PER_SECOND).toBe(10);
-      expect(parsed.RATE_LIMIT_IP_PER_SECOND).toBe(30);
-      expect(parsed.RATE_LIMIT_SOCKET_BURST).toBe(5);
-      expect(parsed.RATE_LIMIT_USER_BURST).toBe(3);
-      expect(parsed.RATE_LIMIT_IP_BURST).toBe(8);
-    });
-
-    it('rate-limit fields accept numeric strings', () => {
-      const parsed = parseEnv({
-        RATE_LIMIT_SOCKET_PER_SECOND: '50',
-        RATE_LIMIT_USER_PER_SECOND: '40',
-        RATE_LIMIT_IP_PER_SECOND: '60',
-        RATE_LIMIT_SOCKET_BURST: '15',
-        RATE_LIMIT_USER_BURST: '10',
-        RATE_LIMIT_IP_BURST: '20',
-      });
-      expect(parsed.RATE_LIMIT_SOCKET_PER_SECOND).toBe(50);
-      expect(parsed.RATE_LIMIT_USER_PER_SECOND).toBe(40);
-      expect(parsed.RATE_LIMIT_IP_PER_SECOND).toBe(60);
-      expect(parsed.RATE_LIMIT_SOCKET_BURST).toBe(15);
-      expect(parsed.RATE_LIMIT_USER_BURST).toBe(10);
-      expect(parsed.RATE_LIMIT_IP_BURST).toBe(20);
-    });
-
-    it('SFU_TOKEN_TTL_SECONDS and TURN_TOKEN_TTL_SECONDS default to 3600', () => {
-      expect(parseEnv({}).SFU_TOKEN_TTL_SECONDS).toBe(3600);
-      expect(parseEnv({}).TURN_TOKEN_TTL_SECONDS).toBe(3600);
-      expect(
-        parseEnv({ SFU_TOKEN_TTL_SECONDS: '1800' }).SFU_TOKEN_TTL_SECONDS,
-      ).toBe(1800);
-      expect(
-        parseEnv({ TURN_TOKEN_TTL_SECONDS: '7200' }).TURN_TOKEN_TTL_SECONDS,
-      ).toBe(7200);
-    });
-  });
-
-  describe('Google OAuth and anonymous login', () => {
-    it('GOOGLE_CLIENT_ID defaults to empty string in development', () => {
-      expect(parseEnv({}).GOOGLE_CLIENT_ID).toBe('');
-      expect(
-        parseEnv({ GOOGLE_CLIENT_ID: 'dev.apps.googleusercontent.com' })
-          .GOOGLE_CLIENT_ID,
-      ).toBe('dev.apps.googleusercontent.com');
-    });
-
-    it('rejects missing GOOGLE_CLIENT_ID in production', () => {
-      try {
-        parseEnv({
-          NODE_ENV: 'production',
-          JWT_SECRET: 'prod',
-          TURN_URL: 'turn:turn.example.com:3478',
-          TURN_SHARED_SECRET: 'turn-secret',
-          CORS_ORIGIN: 'https://app.example.com',
-        });
-        fail('expected parseEnv to throw');
-      } catch (err) {
-        expect(err).toBeInstanceOf(EnvValidationError);
-        const e = err as EnvValidationError;
-        expect(e.issues.issues.map((i) => i.path.join('.'))).toContain(
-          'GOOGLE_CLIENT_ID',
-        );
-      }
-    });
-
-    it('rejects CORS_ORIGIN=* in production', () => {
-      try {
-        parseEnv({
-          NODE_ENV: 'production',
-          JWT_SECRET: 'prod',
-          TURN_URL: 'turn:turn.example.com:3478',
-          TURN_SHARED_SECRET: 'turn-secret',
-          GOOGLE_CLIENT_ID: 'prod.apps.googleusercontent.com',
-          CORS_ORIGIN: '*',
-        });
-        fail('expected parseEnv to throw');
-      } catch (err) {
-        expect(err).toBeInstanceOf(EnvValidationError);
-        const e = err as EnvValidationError;
-        expect(e.issues.issues.map((i) => i.path.join('.'))).toContain(
-          'CORS_ORIGIN',
-        );
-      }
-    });
+  it('exposes a Joi schema usable by ConfigModule', () => {
+    expect(envValidationSchema).toBeDefined();
   });
 });

@@ -50,8 +50,12 @@ function parseAnonymousDto(body: unknown): { displayName?: string } {
   return result.data;
 }
 
-function setOauthCookies(res: Response, state: string, returnTo: string): void {
-  const secure = this_isProd();
+function setOauthCookies(
+  res: Response,
+  state: string,
+  returnTo: string,
+  secure: boolean,
+): void {
   res.cookie(STATE_COOKIE, state, {
     httpOnly: true,
     secure,
@@ -87,10 +91,6 @@ function setSessionCookie(res: Response, token: string, secure: boolean): void {
 
 function clearSessionCookie(res: Response): void {
   res.clearCookie(SESSION_COOKIE, { path: COOKIE_PATH_SESSION });
-}
-
-function this_isProd(): boolean {
-  return process.env['NODE_ENV'] === 'production';
 }
 
 function safeReturnTo(returnTo: string | undefined): string {
@@ -150,7 +150,7 @@ export class AuthController {
   ) {
     const state = randomState();
     const safeReturn = safeReturnTo(returnTo);
-    setOauthCookies(res, state, safeReturn);
+    setOauthCookies(res, state, safeReturn, this.auth.getCookieSecure());
     const provider = this.registry.get('google');
     if (!provider || !provider.meta.enabled) {
       throw new NotFoundException('google provider not registered');

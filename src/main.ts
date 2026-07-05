@@ -1,10 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 
 import { AppModule, SocketIoRedisAdapter } from './app.module';
-import { APP_CONFIG } from './config/app-config.module';
-import type { AppConfig } from './config/app.config';
 
 function parseCorsOrigin(
   raw: string | string[] | undefined,
@@ -36,25 +35,25 @@ export async function bootstrap(): Promise<void> {
     ],
   });
 
-  const config = app.get<AppConfig>(APP_CONFIG);
+  const config = app.get(ConfigService);
+  const httpPort = config.getOrThrow<number>('app.port');
+  const namespace = config.getOrThrow<string>('signaling.namespace');
+  const corsOrigin = config.get<string>('app.corsOrigin') ?? '*';
+  const redisUrl = config.get<string>('redis.url') ?? '';
   app.enableCors({
-    origin: parseCorsOrigin(config.signaling.corsOrigin),
+    origin: parseCorsOrigin(corsOrigin),
     credentials: true,
   });
 
   const wsAdapter = new SocketIoRedisAdapter(app, {
-    redisUrl: config.redis.url || undefined,
+    redisUrl: redisUrl || undefined,
   });
   app.useWebSocketAdapter(wsAdapter);
 
-  await app.listen(config.httpPort);
+  await app.listen(httpPort);
 
-  logger.log(
-    `Signaling server listening on http://localhost:${config.httpPort}`,
-  );
-  logger.log(
-    `Socket.IO signaling: ${config.signaling.namespace} (path /socket.io)`,
-  );
+  logger.log(`Signaling server listening on http://localhost:${httpPort}`);
+  logger.log(`Socket.IO signaling: ${namespace} (path /socket.io)`);
 }
 
 if (require.main === module) {

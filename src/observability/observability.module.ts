@@ -34,10 +34,11 @@ interface HttpLikeResponse {
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const nodeEnv = configService.get<string>('NODE_ENV') ?? 'development';
+        const nodeEnv =
+          configService.get<string>('app.nodeEnv') ?? 'development';
         const isProduction = nodeEnv === 'production';
         const logLevel =
-          configService.get<string>('LOG_LEVEL') ??
+          configService.get<string>('app.logLevel') ??
           (isProduction ? 'info' : 'debug');
         return {
           pinoHttp: {

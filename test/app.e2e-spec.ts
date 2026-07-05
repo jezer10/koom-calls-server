@@ -3,14 +3,12 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { buildAppConfig } from '../src/config/app.config';
-import { parseEnv } from '../src/config/env.schema';
 
 interface InfoResponse {
   name: string;
   version: string;
   signaling: { namespace: string };
-  peer: { enabled: boolean; port: number; path: string; key: string };
+  media: { provider: string };
 }
 
 interface HealthResponse {
@@ -21,7 +19,7 @@ interface HealthResponse {
 
 describe('REST endpoints (e2e)', () => {
   let app: INestApplication;
-  const config = buildAppConfig(parseEnv(process.env), process.env);
+  const corsOrigin = process.env.CORS_ORIGIN ?? '*';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -30,7 +28,7 @@ describe('REST endpoints (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.enableCors({
-      origin: config.signaling.corsOrigin,
+      origin: corsOrigin,
       credentials: true,
     });
     await app.init();
@@ -55,8 +53,7 @@ describe('REST endpoints (e2e)', () => {
     expect(body.name).toBe('koom-calls-server');
     expect(typeof body.version).toBe('string');
     expect(body.signaling.namespace).toBe('/signaling');
-    expect(typeof body.peer.enabled).toBe('boolean');
-    expect(typeof body.peer.port).toBe('number');
+    expect(body.media.provider).toBe('livekit');
   });
 
   it('GET /health reports status ok', async () => {

@@ -25,8 +25,10 @@ import {
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        secret: cfg.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1h' },
+        secret: cfg.getOrThrow<string>('auth.secret'),
+        signOptions: {
+          expiresIn: (cfg.get<string>('auth.ttl') ?? '1h') as never,
+        },
       }),
     }),
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 10 }]),

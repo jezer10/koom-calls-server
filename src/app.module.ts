@@ -22,47 +22,55 @@ import {
   SignalingAdapterModule,
   SocketIoRedisAdapter,
 } from './signaling/signaling.adapter.module';
-import { parseEnv } from './config/env.schema';
-import { AppConfigModule } from './config/app-config.module';
+import { envValidationSchema } from './config/env.schema';
+import appConfig from './config/app.config';
+import authConfig from './config/auth.config';
+import databaseConfig from './config/database.config';
+import googleConfig from './config/google.config';
+import livekitConfig from './config/livekit.config';
+import presenceConfig from './config/presence.config';
+import rateLimitConfig from './config/rate-limit.config';
+import redisConfig from './config/redis.config';
+import securityConfig from './config/security.config';
+import signalingConfig from './config/signaling.config';
+import turnConfig from './config/turn.config';
 
 export { SocketIoRedisAdapter };
-
-function isSqlite(url: string): boolean {
-  return url.startsWith('sqlite');
-}
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      validate: (env) => parseEnv(env, { onWarning: console.warn }),
+      validationSchema: envValidationSchema,
+      load: [
+        appConfig,
+        authConfig,
+        databaseConfig,
+        googleConfig,
+        livekitConfig,
+        presenceConfig,
+        rateLimitConfig,
+        redisConfig,
+        securityConfig,
+        signalingConfig,
+        turnConfig,
+      ],
+      validationOptions: {
+        abortEarly: false,
+        allowUnknown: true,
+      },
     }),
-    AppConfigModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => {
-        const url = cfg.getOrThrow<string>('DATABASE_URL');
-        const isDev = cfg.get<string>('NODE_ENV') !== 'production';
-        if (isSqlite(url)) {
-          return {
-            type: 'better-sqlite3' as const,
-            database:
-              url === 'sqlite::memory:'
-                ? ':memory:'
-                : url.replace(/^sqlite:/, ''),
-            autoSave: false,
-            entities: [UserEntity],
-            synchronize: isDev,
-          };
-        }
         return {
           type: 'postgres' as const,
-          url,
+          url: cfg.getOrThrow<string>('database.url'),
           entities: [UserEntity],
           migrations: [Init1781655355076],
           synchronize: false,
           migrationsRun: true,
-          ssl: cfg.get<boolean>('DATABASE_SSL')
+          ssl: cfg.get<boolean>('database.ssl')
             ? { rejectUnauthorized: false }
             : false,
         };

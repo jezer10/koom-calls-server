@@ -5,20 +5,13 @@ import { JwtStrategy, type JwtPayload } from '../jwt.strategy';
 
 const SECRET = 'test-jwt-secret-please-change';
 
-function makeConfigService(): ConfigService {
-  return {
-    getOrThrow: <T = string>(key: string): T => {
-      if (key === 'JWT_SECRET') return SECRET as unknown as T;
-      throw new Error(`unexpected key ${key}`);
-    },
-  } as unknown as ConfigService;
-}
-
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
 
   beforeEach(() => {
-    strategy = new JwtStrategy(makeConfigService());
+    strategy = new JwtStrategy({
+      getOrThrow: jest.fn().mockReturnValue(SECRET),
+    } as unknown as ConfigService);
   });
 
   describe('validate()', () => {

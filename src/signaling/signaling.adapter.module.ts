@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SocketIoRedisAdapter } from './socket-io-redis.adapter';
-import { APP_CONFIG } from '../config/app-config.module';
-import type { AppConfig } from '../config/app.config';
+import { canConnectRedis } from '../presence/redis.client';
 
 export { SocketIoRedisAdapter } from './socket-io-redis.adapter';
 export type { SocketIoRedisAdapterOptions } from './socket-io-redis.adapter';
@@ -10,11 +10,20 @@ export type { SocketIoRedisAdapterOptions } from './socket-io-redis.adapter';
   providers: [
     {
       provide: SocketIoRedisAdapter,
-      inject: [APP_CONFIG],
-      useFactory: (appConfig: AppConfig) =>
-        new SocketIoRedisAdapter(undefined, {
-          redisUrl: appConfig.redis.url || undefined,
-        }),
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => {
+        const redisUrlValue = configService.get<string>('redis.url') ?? '';
+        const redisUrl =
+          redisUrlValue && (await canConnectRedis(redisUrlValue))
+            ? redisUrlValue
+            : undefined;
+        if (redisUrlValue && !redisUrl) {
+          new Logger(SignalingAdapterModule.name).warn(
+            'Redis unavailable; Socket.IO will use the in-memory adapter',
+          );
+        }
+        return new SocketIoRedisAdapter(undefined, { redisUrl });
+      },
     },
   ],
   exports: [SocketIoRedisAdapter],

@@ -26,11 +26,11 @@ PR develop → main
 
 Imágenes publicadas con tags:
 
-| Tag | Cuándo |
-|---|---|
-| `latest` | push a `main` (con `enable=${{ github.ref == 'refs/heads/main' }}`) |
-| `main` | cada push a `main` (branch ref) |
-| `<sha-corto>` | cualquier commit |
+| Tag           | Cuándo                                                              |
+| ------------- | ------------------------------------------------------------------- |
+| `latest`      | push a `main` (con `enable=${{ github.ref == 'refs/heads/main' }}`) |
+| `main`        | cada push a `main` (branch ref)                                     |
+| `<sha-corto>` | cualquier commit                                                    |
 
 > Configuración mínima intencional: no se publican tags de develop,
 > ni de PR, ni semver. Para versiones formales, tag en `main` y usá
@@ -40,13 +40,13 @@ Imágenes publicadas con tags:
 
 ### Requeridos para deploy
 
-| Secret | Ejemplo | Notas |
-|---|---|---|
-| `VPS_HOST` | `203.0.113.10` o `vps.example.com` | IP pública o dominio |
-| `VPS_USER` | `deploy` | usuario SSH (no root, con `docker` group) |
-| `VPS_SSH_KEY` | (clave privada) | la **pública** va en `~/.ssh/authorized_keys` de la VPS |
-| `VPS_PORT` | `22` | opcional, default 22 |
-| `VPS_DEPLOY_DIR_BACK` | `~/koom-calls-server` | opcional, default `~/koom-calls-server` |
+| Secret                | Ejemplo                            | Notas                                                   |
+| --------------------- | ---------------------------------- | ------------------------------------------------------- |
+| `VPS_HOST`            | `203.0.113.10` o `vps.example.com` | IP pública o dominio                                    |
+| `VPS_USER`            | `deploy`                           | usuario SSH (no root, con `docker` group)               |
+| `VPS_SSH_KEY`         | (clave privada)                    | la **pública** va en `~/.ssh/authorized_keys` de la VPS |
+| `VPS_PORT`            | `22`                               | opcional, default 22                                    |
+| `VPS_DEPLOY_DIR_BACK` | `~/koom-calls-server`              | opcional, default `~/koom-calls-server`                 |
 
 ### Auto-proveídos
 
@@ -55,7 +55,8 @@ Imágenes publicadas con tags:
 
 ## 3. Variables en la VPS: `~/koom-calls-server/.env`
 
-Copia `back/.env.example.docker` a `~/koom-calls-server/.env` en la VPS y rellena.
+Copia `back/.env.example` a `~/koom-calls-server/.env` en la VPS y rellena los
+valores del servidor.
 
 Genera secretos con:
 
@@ -72,13 +73,13 @@ en la red `internal` del compose (sin gateway, sin acceso al host ni a
 internet). El `api` y `coturn` son los únicos puntos de contacto con
 el exterior:
 
-| Servicio | Puerto host | Protocolo | Origen permitido | Por qué |
-|---|---|---|---|---|
-| `api` | `8080` | TCP | el front (vía NPM) | HTTP + WebSocket signaling |
-| `coturn` | `3478` | UDP | `0.0.0.0/0` | TURN server: los clientes WebRTC lo contactan para atravesar NAT |
-| `coturn` | `3478` | TCP | `0.0.0.0/0` | TURN over TCP (fallback en redes restrictivas) |
-| `coturn` | `5349` | TCP | `0.0.0.0/0` | TURN over TLS (DTLS) |
-| `coturn` | `49152-49252` | UDP | `0.0.0.0/0` | Rango de relay de medios (mismo `--min-port`/`--max-port` del compose) |
+| Servicio | Puerto host   | Protocolo | Origen permitido   | Por qué                                                                |
+| -------- | ------------- | --------- | ------------------ | ---------------------------------------------------------------------- |
+| `api`    | `8080`        | TCP       | el front (vía NPM) | HTTP + WebSocket signaling                                             |
+| `coturn` | `3478`        | UDP       | `0.0.0.0/0`        | TURN server: los clientes WebRTC lo contactan para atravesar NAT       |
+| `coturn` | `3478`        | TCP       | `0.0.0.0/0`        | TURN over TCP (fallback en redes restrictivas)                         |
+| `coturn` | `5349`        | TCP       | `0.0.0.0/0`        | TURN over TLS (DTLS)                                                   |
+| `coturn` | `49152-49252` | UDP       | `0.0.0.0/0`        | Rango de relay de medios (mismo `--min-port`/`--max-port` del compose) |
 
 **No se publican al host** (viven en `internal`):
 `postgres:5432`, `redis:6379`, `livekit:7880` (plano de control), `livekit:7881-7882/udp` (plano de medios). El `api` los resuelve por nombre DNS dentro del compose.
@@ -89,16 +90,16 @@ Si NPM corre en **el mismo VPS** que este stack, el `api` está conectado
 a la red `npm-proxy` y NPM lo alcanza por nombre de contenedor
 (`koom-calls-server:8080`). Configurar un Proxy Host en NPM:
 
-| Campo en NPM | Valor |
-|---|---|
-| Domain Names | `api.tu-dominio.com` |
-| Scheme | `http` |
-| Forward Hostname / IP | `koom-calls-server` (nombre del contenedor) |
-| Forward Port | `8080` |
-| Websockets Support | **ON** (LiveKit signaling + Socket.IO) |
-| Cache Assets | OFF |
-| Force SSL | ON (NEM pide cert Let's Encrypt desde la UI) |
-| HSTS | ON |
+| Campo en NPM          | Valor                                        |
+| --------------------- | -------------------------------------------- |
+| Domain Names          | `api.tu-dominio.com`                         |
+| Scheme                | `http`                                       |
+| Forward Hostname / IP | `koom-calls-server` (nombre del contenedor)  |
+| Forward Port          | `8080`                                       |
+| Websockets Support    | **ON** (LiveKit signaling + Socket.IO)       |
+| Cache Assets          | OFF                                          |
+| Force SSL             | ON (NEM pide cert Let's Encrypt desde la UI) |
+| HSTS                  | ON                                           |
 
 El `8080/tcp` queda en `0.0.0.0` para que (a) NPM lo alcance por
 nombre dentro de `npm-proxy`, y (b) vos puedas hacer
@@ -108,36 +109,36 @@ nombre dentro de `npm-proxy`, y (b) vos puedas hacer
 lo soporta. Sus puertos siguen publicándose al host directo y deben
 estar abiertos en el firewall del VPS.
 
-| Variable | Requerida prod | Default dev | Notas |
-|---|---|---|---|
-| `NODE_ENV` | sí (production) | development | activa validaciones estrictas |
-| `PORT` | opcional | 8080 | |
-| `CORS_ORIGIN` | recomendada | `*` | ej. `https://app.example.com` (no `*` con credenciales) |
-| `JWT_SECRET` | **sí** | auto-gen dev | 32+ bytes random |
-| `JWT_TTL` | opcional | 1h | ej. `15m`, `7d` |
-| `JWT_AUDIENCE` | opcional | — | claim `aud` |
-| `JWT_ISSUER` | opcional | — | claim `iss` |
-| `DATABASE_URL` | recomendada | `sqlite::memory:` | prod: `postgres://koom:<pw>@postgres:5432/koom` |
-| `REDIS_URL` | recomendada | `''` | `redis://redis:6379`; vacío = adapter WS desactivado |
-| `TURN_URL` | **sí** | `''` | ej. `turn:turn.example.com:3478` |
-| `TURN_SHARED_SECRET` | **sí** | `dev-turn-secret` | mismo que coturn |
-| `TURN_TTL` | opcional | 3600 | TTL de credenciales TURN (segundos) |
-| `TURN_REALM` | opcional | `koom.local` | |
-| `TURN_STUN_URLS` | opcional | `stun:stun.l.google.com:19302` | CSV |
-| `LIVEKIT_URL` | recomendada | `''` | `ws://livekit:7880` |
-| `LIVEKIT_API_KEY` | recomendada | `''` | |
-| `LIVEKIT_API_SECRET` | recomendada | `''` | |
-| `SFU_TOKEN_TTL_SECONDS` | opcional | 3600 | |
-| `TURN_TOKEN_TTL_SECONDS` | opcional | 3600 | |
-| `LOG_LEVEL` | opcional | info | pino: trace/debug/info/warn/error |
-| `PRESENCE_TTL_SECONDS` | opcional | 60 | |
-| `RATE_LIMIT_SOCKET_BURST` | opcional | 30 | |
-| `RATE_LIMIT_SOCKET_PER_SECOND` | opcional | 30 | |
-| `RATE_LIMIT_USER_BURST` | opcional | 100 | |
-| `RATE_LIMIT_USER_PER_SECOND` | opcional | 100 | |
-| `RATE_LIMIT_IP_BURST` | opcional | 200 | |
-| `RATE_LIMIT_IP_PER_SECOND` | opcional | 200 | |
-| `SIGNALING_NAMESPACE` | opcional | `/signaling` | |
+| Variable                       | Requerida prod  | Default dev                               | Notas                                                   |
+| ------------------------------ | --------------- | ----------------------------------------- | ------------------------------------------------------- |
+| `NODE_ENV`                     | sí (production) | development                               | activa validaciones estrictas                           |
+| `PORT`                         | opcional        | 8080                                      |                                                         |
+| `CORS_ORIGIN`                  | recomendada     | `*`                                       | ej. `https://app.example.com` (no `*` con credenciales) |
+| `JWT_SECRET`                   | **sí**          | auto-gen dev                              | 32+ bytes random                                        |
+| `JWT_TTL`                      | opcional        | 1h                                        | ej. `15m`, `7d`                                         |
+| `JWT_AUDIENCE`                 | opcional        | —                                         | claim `aud`                                             |
+| `JWT_ISSUER`                   | opcional        | —                                         | claim `iss`                                             |
+| `DATABASE_URL`                 | obligatoria     | `postgres://koom:<pw>@postgres:5432/koom` | prod: `postgres://koom:<pw>@postgres:5432/koom`         |
+| `REDIS_URL`                    | recomendada     | `''`                                      | `redis://redis:6379`; vacío = adapter WS desactivado    |
+| `TURN_URL`                     | **sí**          | `''`                                      | ej. `turn:turn.example.com:3478`                        |
+| `TURN_SHARED_SECRET`           | **sí**          | `dev-turn-secret`                         | mismo que coturn                                        |
+| `TURN_TTL`                     | opcional        | 3600                                      | TTL de credenciales TURN (segundos)                     |
+| `TURN_REALM`                   | opcional        | `koom.local`                              |                                                         |
+| `TURN_STUN_URLS`               | opcional        | `stun:stun.l.google.com:19302`            | CSV                                                     |
+| `LIVEKIT_URL`                  | recomendada     | `''`                                      | `ws://livekit:7880`                                     |
+| `LIVEKIT_API_KEY`              | recomendada     | `''`                                      |                                                         |
+| `LIVEKIT_API_SECRET`           | recomendada     | `''`                                      |                                                         |
+| `SFU_TOKEN_TTL_SECONDS`        | opcional        | 3600                                      |                                                         |
+| `TURN_TOKEN_TTL_SECONDS`       | opcional        | 3600                                      |                                                         |
+| `LOG_LEVEL`                    | opcional        | info                                      | pino: trace/debug/info/warn/error                       |
+| `PRESENCE_TTL_SECONDS`         | opcional        | 60                                        |                                                         |
+| `RATE_LIMIT_SOCKET_BURST`      | opcional        | 5                                         |                                                         |
+| `RATE_LIMIT_SOCKET_PER_SECOND` | opcional        | 20                                        |                                                         |
+| `RATE_LIMIT_USER_BURST`        | opcional        | 3                                         |                                                         |
+| `RATE_LIMIT_USER_PER_SECOND`   | opcional        | 10                                        |                                                         |
+| `RATE_LIMIT_IP_BURST`          | opcional        | 8                                         |                                                         |
+| `RATE_LIMIT_IP_PER_SECOND`     | opcional        | 30                                        |                                                         |
+| `SIGNALING_NAMESPACE`          | opcional        | `/signaling`                              |                                                         |
 
 ## 4. Setup inicial en la VPS (una sola vez)
 
@@ -147,8 +148,8 @@ ssh deploy@VPS_HOST
 # 1. Directorio de deploy
 mkdir -p ~/koom-calls-server && cd ~/koom-calls-server
 
-# 2. .env (copiar de .env.example.docker y rellenar secretos reales)
-scp back/.env.example.docker deploy@VPS_HOST:~/koom-calls-server/.env
+# 2. .env (copiar de .env.example y rellenar valores reales del servidor)
+scp back/.env.example deploy@VPS_HOST:~/koom-calls-server/.env
 ssh deploy@VPS_HOST "nano ~/koom-calls-server/.env"
 
 # 3. (Opcional) Smoke test ANTES del primer deploy automático:
@@ -280,14 +281,14 @@ curl -fsS -H "Authorization: Bearer $TOKEN" \
 
 ## 10. Troubleshooting
 
-| Síntoma | Causa probable | Solución |
-|---|---|---|
-| `JWT_SECRET is required in production` | Falta o vacío en `NODE_ENV=production` | Setear con `openssl rand -base64 48` en la VPS |
-| `TURN_URL is required in production` | Igual | Setear con URL del servidor coturn |
-| `Could not find module 'X'` | `pnpm install` falló en la build | Revisar logs de la action, re-disparar |
-| Health check falla 20s | La imagen crashea o no escucha | `docker logs koom-calls-server` en la VPS |
-| `unauthorized` en socket.io | Secret del middleware WS ≠ del firmador | El middleware usa `process.env.JWT_SECRET`, mismo que el firmador |
-| `permission denied` en `docker login` | `GITHUB_TOKEN` expiró o sin scopes | Re-disparar la action, el token se regenera |
-| Socket.IO no recibe eventos entre instancias | Falta `REDIS_URL` | Setear `REDIS_URL=redis://...` y redeploy |
-| Front no conecta al back | `VITE_API_BASE_URL` del front apunta a localhost o ruta incorrecta | Corregir secret en el repo del front, re-disparar publish + deploy del front |
-| Deploy falla con `Falta ~/koom-calls-server/.env` | `.env` no existe en la VPS | Copiá `back/.env.example.docker` a `~/koom-calls-server/.env` en la VPS, editá los secretos, y re-dispará el workflow |
+| Síntoma                                           | Causa probable                                                     | Solución                                                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `JWT_SECRET is required in production`            | Falta o vacío en `NODE_ENV=production`                             | Setear con `openssl rand -base64 48` en la VPS                                                                        |
+| `TURN_URL is required in production`              | Igual                                                              | Setear con URL del servidor coturn                                                                                    |
+| `Could not find module 'X'`                       | `pnpm install` falló en la build                                   | Revisar logs de la action, re-disparar                                                                                |
+| Health check falla 20s                            | La imagen crashea o no escucha                                     | `docker logs koom-calls-server` en la VPS                                                                             |
+| `unauthorized` en socket.io                       | Secret del middleware WS ≠ del firmador                            | El middleware usa `process.env.JWT_SECRET`, mismo que el firmador                                                     |
+| `permission denied` en `docker login`             | `GITHUB_TOKEN` expiró o sin scopes                                 | Re-disparar la action, el token se regenera                                                                           |
+| Socket.IO no recibe eventos entre instancias      | Falta `REDIS_URL`                                                  | Setear `REDIS_URL=redis://...` y redeploy                                                                             |
+| Front no conecta al back                          | `VITE_API_BASE_URL` del front apunta a localhost o ruta incorrecta | Corregir secret en el repo del front, re-disparar publish + deploy del front                                          |
+| Deploy falla con `Falta ~/koom-calls-server/.env` | `.env` no existe en la VPS                                         | Copiá `back/.env.example` a `~/koom-calls-server/.env` en la VPS, ajustá los valores del servidor, y re-dispará el workflow |

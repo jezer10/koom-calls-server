@@ -1,21 +1,29 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InMemoryPresenceService } from './in-memory-presence.service';
 import { PRESENCE_SERVICE } from './presence.tokens';
 import type { PresenceService } from './presence.service';
-import { createRedisClient } from './redis.client';
+import { canConnectRedis, createRedisClient } from './redis.client';
 import { RedisPresenceService } from './redis-presence.service';
-import { APP_CONFIG } from '../config/app-config.module';
-import type { AppConfig } from '../config/app.config';
 
 @Module({
   providers: [
     {
       provide: PRESENCE_SERVICE,
-      inject: [APP_CONFIG],
-      useFactory: (appConfig: AppConfig): PresenceService => {
-        const url = appConfig.redis.url;
-        const defaultTtl = appConfig.presence.ttlSeconds;
+      inject: [ConfigService],
+      useFactory: async (
+        configService: ConfigService,
+      ): Promise<PresenceService> => {
+        const url = configService.get<string>('redis.url') ?? '';
+        const defaultTtl =
+          configService.get<number>('presence.ttlSeconds') ?? 60;
         if (url.trim() === '') {
+          return new InMemoryPresenceService(defaultTtl);
+        }
+        if (!(await canConnectRedis(url))) {
+          new Logger(PresenceModule.name).warn(
+            'Redis unavailable; using in-memory presence fallback',
+          );
           return new InMemoryPresenceService(defaultTtl);
         }
         const client = createRedisClient({ url });

@@ -78,7 +78,7 @@ jobs:
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}"
 
             cd "$DEPLOY_DIR"
-            [ -f .env ] || { echo "::error::Falta $DEPLOY_DIR/.env en la VPS. Copiá back/.env.example.docker y editá."; exit 1; }
+            [ -f .env ] || { echo "::error::Falta $DEPLOY_DIR/.env en la VPS. Copiá back/.env.example y editá los valores del servidor."; exit 1; }
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             docker pull "$IMAGE"

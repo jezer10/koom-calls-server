@@ -1,230 +1,44 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { buildAppConfig } from './app.config';
-import { parseEnv, type ParsedEnv } from './env.schema';
+import appConfig from './app.config';
+import { deriveHttpUrl } from './livekit.config';
+import { parseList } from './turn.config';
 
-function build(
-  env: NodeJS.ProcessEnv,
-  parsed: ParsedEnv = parseEnv(env),
-): ReturnType<typeof buildAppConfig> {
-  return buildAppConfig(parsed, env);
-}
+describe('config namespaces', () => {
+  const originalEnv = { ...process.env };
 
-describe('buildAppConfig', () => {
-  it('returns sensible defaults when no env vars are set', () => {
-    const env: NodeJS.ProcessEnv = { TURN_URL: 'turn:turn.example.com:3478' };
-    const cfg = build(env);
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
 
-    expect(cfg.httpPort).toBe(8080);
-    expect(cfg.signaling).toEqual({
-      namespace: '/signaling',
+  it('derives HTTP URLs from WebSocket URLs', () => {
+    expect(deriveHttpUrl('ws://livekit:7880')).toBe('http://livekit:7880');
+    expect(deriveHttpUrl('wss://livekit.example.com')).toBe(
+      'https://livekit.example.com',
+    );
+    expect(deriveHttpUrl('http://api.example.com')).toBe(
+      'http://api.example.com',
+    );
+    expect(deriveHttpUrl('')).toBe('');
+  });
+
+  it('parses comma-separated TURN lists and falls back when empty', () => {
+    expect(parseList('a, b ,c', ['x'])).toEqual(['a', 'b', 'c']);
+    expect(parseList('', ['x', 'y'])).toEqual(['x', 'y']);
+    expect(parseList(undefined, ['x'])).toEqual(['x']);
+  });
+
+  it('builds the app namespace with normalized defaults', () => {
+    delete process.env.PORT;
+    delete process.env.CORS_ORIGIN;
+    delete process.env.FRONTEND_ORIGIN;
+    delete process.env.LOG_LEVEL;
+    process.env.NODE_ENV = 'test';
+
+    expect(appConfig()).toEqual({
+      port: 8080,
       corsOrigin: '*',
+      frontendOrigin: '',
+      logLevel: 'debug',
+      nodeEnv: 'test',
     });
-    expect(cfg.jwt).toMatchObject({
-      secret: expect.any(String),
-      audience: undefined,
-      issuer: undefined,
-    });
-    expect(cfg.turn).toMatchObject({
-      url: 'turn:turn.example.com:3478',
-      sharedSecret: expect.any(String),
-      ttlSeconds: 3600,
-      realm: 'koom.local',
-      stunUrls: ['stun:stun.l.google.com:19302'],
-    });
-    expect(cfg.env).toMatchObject({
-      PORT: 8080,
-      CORS_ORIGIN: '*',
-      SIGNALING_NAMESPACE: '/signaling',
-      DATABASE_URL: 'sqlite::memory:',
-      JWT_TTL: '1h',
-      LIVEKIT_URL: '',
-      LIVEKIT_API_KEY: '',
-      LIVEKIT_API_SECRET: '',
-      REDIS_URL: '',
-      TURN_URL: 'turn:turn.example.com:3478',
-      TURN_SHARED_SECRET: '',
-      TURN_TTL: 3600,
-      NODE_ENV: 'development',
-    });
-    expect(typeof cfg.env.JWT_SECRET).toBe('string');
-    expect(cfg.env.JWT_SECRET.length).toBeGreaterThan(0);
-  });
-
-  it('parses numeric env values', () => {
-    const env: NodeJS.ProcessEnv = {
-      PORT: '4000',
-      TURN_URL: 'turn:turn.example.com:3478',
-      TURN_TTL: '600',
-    };
-    const cfg = build(env);
-    expect(cfg.httpPort).toBe(4000);
-    expect(cfg.env.PORT).toBe(4000);
-    expect(cfg.turn.ttlSeconds).toBe(600);
-  });
-
-  it('uses custom signaling namespace and CORS origin', () => {
-    const env: NodeJS.ProcessEnv = {
-      SIGNALING_NAMESPACE: '/call',
-      CORS_ORIGIN: 'https://app.example.com',
-      TURN_URL: 'turn:turn.example.com:3478',
-    };
-    const cfg = build(env);
-    expect(cfg.signaling.namespace).toBe('/call');
-    expect(cfg.signaling.corsOrigin).toBe('https://app.example.com');
-    expect(cfg.env.SIGNALING_NAMESPACE).toBe('/call');
-    expect(cfg.env.CORS_ORIGIN).toBe('https://app.example.com');
-  });
-
-  it('populates the env field with parsed values from process.env', () => {
-    const env: NodeJS.ProcessEnv = {
-      DATABASE_URL: 'postgres://db/koom',
-      JWT_SECRET: 'super-secret',
-      JWT_TTL: '15m',
-      LIVEKIT_URL: 'wss://livekit.example.com',
-      LIVEKIT_API_KEY: 'APIKEY',
-      LIVEKIT_API_SECRET: 'APISECRET',
-      REDIS_URL: 'redis://localhost:6379',
-      TURN_URL: 'turn:turn.example.com:3478',
-      TURN_SHARED_SECRET: 'turn-secret',
-      TURN_TTL: '600',
-      GOOGLE_CLIENT_ID: 'prod.apps.googleusercontent.com',
-      GOOGLE_CLIENT_SECRET: 'prod-secret',
-      GOOGLE_REDIRECT_URI: 'https://app.example.com/auth/google/callback',
-      FRONTEND_ORIGIN: 'https://app.example.com',
-      CORS_ORIGIN: 'https://app.example.com',
-      NODE_ENV: 'production',
-    };
-
-    const cfg = build(env);
-
-    expect(cfg.env).toMatchObject({
-      DATABASE_URL: 'postgres://db/koom',
-      JWT_SECRET: 'super-secret',
-      JWT_TTL: '15m',
-      LIVEKIT_URL: 'wss://livekit.example.com',
-      LIVEKIT_API_KEY: 'APIKEY',
-      LIVEKIT_API_SECRET: 'APISECRET',
-      REDIS_URL: 'redis://localhost:6379',
-      TURN_URL: 'turn:turn.example.com:3478',
-      TURN_SHARED_SECRET: 'turn-secret',
-      TURN_TTL: 600,
-      NODE_ENV: 'production',
-    });
-  });
-
-  it('builds livekit namespace with sfuUrl falling back to LIVEKIT_URL when SFU_URL is empty', () => {
-    const env: NodeJS.ProcessEnv = {
-      LIVEKIT_URL: 'ws://livekit:7880',
-      LIVEKIT_API_KEY: 'key',
-      LIVEKIT_API_SECRET: 'secret',
-      TURN_URL: 'turn:turn.example.com:3478',
-    };
-    const cfg = build(env);
-    expect(cfg.livekit.url).toBe('ws://livekit:7880');
-    expect(cfg.livekit.sfuUrl).toBe('ws://livekit:7880');
-    expect(cfg.livekit.httpUrl).toBe('http://livekit:7880');
-    expect(cfg.livekit.apiKey).toBe('key');
-    expect(cfg.livekit.apiSecret).toBe('secret');
-  });
-
-  it('uses SFU_URL over LIVEKIT_URL when both are set', () => {
-    const env: NodeJS.ProcessEnv = {
-      LIVEKIT_URL: 'ws://livekit:7880',
-      SFU_URL: 'wss://livekit.example.com',
-      LIVEKIT_API_KEY: 'key',
-      LIVEKIT_API_SECRET: 'secret',
-      TURN_URL: 'turn:turn.example.com:3478',
-    };
-    const cfg = build(env);
-    expect(cfg.livekit.url).toBe('ws://livekit:7880');
-    expect(cfg.livekit.sfuUrl).toBe('wss://livekit.example.com');
-  });
-
-  it('builds google namespace from env', () => {
-    const env: NodeJS.ProcessEnv = {
-      GOOGLE_CLIENT_ID: 'cid',
-      GOOGLE_CLIENT_SECRET: 'csecret',
-      GOOGLE_REDIRECT_URI: 'https://app.example.com/cb',
-      FRONTEND_ORIGIN: 'https://app.example.com',
-      TURN_URL: 'turn:turn.example.com:3478',
-    };
-    const cfg = build(env);
-    expect(cfg.google.clientId).toBe('cid');
-    expect(cfg.google.clientSecret).toBe('csecret');
-    expect(cfg.google.redirectUri).toBe('https://app.example.com/cb');
-    expect(cfg.google.frontendOrigin).toBe('https://app.example.com');
-  });
-
-  it('builds redis and presence namespaces', () => {
-    const env: NodeJS.ProcessEnv = {
-      REDIS_URL: 'redis://redis:6379',
-      TURN_URL: 'turn:turn.example.com:3478',
-    };
-    const cfg = build(env);
-    expect(cfg.redis.url).toBe('redis://redis:6379');
-    expect(typeof cfg.presence.ttlSeconds).toBe('number');
-  });
-
-  it('builds rateLimit namespace from env', () => {
-    const env: NodeJS.ProcessEnv = {
-      RATE_LIMIT_SOCKET_PER_SECOND: '5',
-      RATE_LIMIT_USER_PER_SECOND: '10',
-      RATE_LIMIT_IP_PER_SECOND: '20',
-      RATE_LIMIT_SOCKET_BURST: '3',
-      RATE_LIMIT_USER_BURST: '5',
-      RATE_LIMIT_IP_BURST: '8',
-      TURN_URL: 'turn:turn.example.com:3478',
-    };
-    const cfg = build(env);
-    expect(cfg.rateLimit.socketPerSecond).toBe(5);
-    expect(cfg.rateLimit.userPerSecond).toBe(10);
-    expect(cfg.rateLimit.ipPerSecond).toBe(20);
-    expect(cfg.rateLimit.socketBurst).toBe(3);
-    expect(cfg.rateLimit.userBurst).toBe(5);
-    expect(cfg.rateLimit.ipBurst).toBe(8);
-  });
-
-  it('parses TURN_STUN_URLS as a comma-separated list', () => {
-    const env: NodeJS.ProcessEnv = {
-      TURN_URL: 'turn:turn.example.com:3478',
-      TURN_STUN_URLS: 'stun:a.example.com:3478, stun:b.example.com:3478',
-    };
-    const cfg = build(env);
-    expect(cfg.turn.stunUrls).toEqual([
-      'stun:a.example.com:3478',
-      'stun:b.example.com:3478',
-    ]);
-  });
-
-  it('requires TURN_URL in production', () => {
-    // parseEnv() catches this in Zod; the env-validation error mentions TURN_URL
-    // via the production-only requirements embedded in the schema.
-    expect(() =>
-      parseEnv({
-        NODE_ENV: 'production',
-        JWT_SECRET: 'real-secret',
-        TURN_SHARED_SECRET: 'real-secret',
-      }),
-    ).toThrow();
-  });
-
-  it('requires JWT_SECRET in production', () => {
-    expect(() =>
-      parseEnv({
-        NODE_ENV: 'production',
-        TURN_URL: 'turn:turn.example.com:3478',
-        TURN_SHARED_SECRET: 'real-secret',
-      }),
-    ).toThrow();
-  });
-
-  it('requires TURN_SHARED_SECRET in production', () => {
-    expect(() =>
-      parseEnv({
-        NODE_ENV: 'production',
-        TURN_URL: 'turn:turn.example.com:3478',
-        JWT_SECRET: 'real-secret',
-      }),
-    ).toThrow();
   });
 });

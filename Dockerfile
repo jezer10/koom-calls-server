@@ -1,13 +1,15 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22-alpine AS build
+FROM node:22-alpine AS deps
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY . .
-RUN pnpm run build
 
-FROM node:22-alpine
+FROM deps AS build
+COPY . .
+RUN pnpm run build && pnpm prune --prod
+
+FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=8080
 RUN apk add --no-cache wget && addgroup -S koom && adduser -S koom -G koom
