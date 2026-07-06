@@ -5,13 +5,6 @@ import cookieParser from 'cookie-parser';
 
 import { AppModule, SocketIoRedisAdapter } from './app.module';
 
-function parseCorsOrigin(
-  raw: string | string[] | undefined,
-): string | string[] {
-  if (raw === undefined) return '*';
-  return raw;
-}
-
 export async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
 
@@ -38,10 +31,10 @@ export async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService);
   const httpPort = config.getOrThrow<number>('app.port');
   const namespace = config.getOrThrow<string>('signaling.namespace');
-  const corsOrigin = config.get<string>('app.corsOrigin') ?? '*';
   const redisUrl = config.get<string>('redis.url') ?? '';
+  const corsOrigin = config.get<string>('app.frontendOrigin') ?? '*';
   app.enableCors({
-    origin: parseCorsOrigin(corsOrigin),
+    origin: corsOrigin,
     credentials: true,
   });
 
